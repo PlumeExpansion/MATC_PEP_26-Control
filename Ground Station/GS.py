@@ -6,7 +6,8 @@ FREQ = 20
 
 PORT = "COM4"
 BAUD = 38400
-MAC_USV_RN = "0013A20042839427"
+# MAC_USV_RN = "0013A20042839427"
+MAC_USV_RN = "0013A20042839F27"
 device = XBeeDevice(PORT, BAUD)
 device.open()
 # device.serial_port.rtscts = True # type: ignore # Enable Flow Control for the Waveshare board
