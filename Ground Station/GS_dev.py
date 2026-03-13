@@ -1,4 +1,4 @@
-from digi.xbee.devices import XBeeDevice, RemoteXBeeDevice
+from digi.xbee.devices import XBeeDevice, RemoteXBeeDevice, XBeeMessage
 from digi.xbee.models.address import XBee64BitAddress
 
 PRINT_PORTS = False
@@ -23,9 +23,12 @@ print('INFO: device connected')
 remote_addr = XBee64BitAddress.from_hex_string(MAC_USV_RN)
 remove_device = RemoteXBeeDevice(device, remote_addr)
 
-def on_data_received(xbee_message):
+def on_data_received(xbee_message: XBeeMessage):
 	data = xbee_message.data.decode()
-	print(f"INFO: received RSSI: {xbee_message.rssi} dBm | Data: {data}")
+	sender = xbee_message.remote_device.get_64bit_addr()
+	rssi_val = device.get_parameter("DB")
+	rssi_dbm = -int.from_bytes(rssi_val, byteorder="big")
+	print(f"INFO: received from: {sender}\nData: {data}\nRSSI: {rssi_dbm} dBm")
 
 device.add_data_received_callback(on_data_received)
 

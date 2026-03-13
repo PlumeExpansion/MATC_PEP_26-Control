@@ -8,6 +8,7 @@ XBeeAddress64 addrGS = XBeeAddress64(0x0013A200, 0x42839F27);
 
 XBee xbee = XBee();
 ZBRxResponse rx = ZBRxResponse();
+AtCommandResponse at = AtCommandResponse();
 TxStatusResponse txStatus = TxStatusResponse();
 String inputBuffer = "";
 
@@ -33,7 +34,7 @@ void loop() {
 		{
 			xbee.getResponse().getZBRxResponse(rx);
 
-			Serial.print("INFO: Received from: ");
+			Serial.print("INFO: received from: ");
 			Serial.print(rx.getRemoteAddress64().getMsb(), HEX);
 			Serial.println(rx.getRemoteAddress64().getLsb(), HEX);
 
@@ -49,22 +50,21 @@ void loop() {
 			Serial.print("ERROR: Erro reading packet, code: ");
 			Serial.println(xbee.getResponse().getErrorCode());
 		}
-		else
+		else if (xbee.getResponse().getApiId() != ZB_TX_STATUS_RESPONSE)
 		{
 			Serial.print("INFO: received response, id: ");
-			Serial.println(xbee.getResponse().getApiId());
+			Serial.println(xbee.getResponse().getApiId(), HEX);
 		}
 	}
 
 	while (Serial.available())
 	{
 		char c = Serial.read();
+		Serial.print(c);
 		if (c == '\n')
 		{
 			if (inputBuffer.length() > 0)
 			{
-				Serial.print("INFO: sending");
-				Serial.println(inputBuffer);
 				sendRawAPI(addrGS, inputBuffer);
 				inputBuffer = "";
 			}
@@ -127,6 +127,6 @@ void sendRawAPI(XBeeAddress64 address, String message) {
   Serial1.write(checksum);          // Checksum
   Serial1.flush();
 
-  Serial.print("Raw API Sent: ");
+  Serial.print("INFO sending: ");
   Serial.println(message);
 }
