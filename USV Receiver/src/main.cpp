@@ -8,34 +8,24 @@ XBeeAddress64 addrGS = XBeeAddress64(0x0013A200, 0x42839F27);
 
 XBee xbee = XBee();
 ZBRxResponse rx = ZBRxResponse();
-// ZBTxStatusResponse txStatus = ZBTxStatusResponse();
 TxStatusResponse txStatus = TxStatusResponse();
 String inputBuffer = "";
-
-void send(String inputBuffer);
 
 void setup() {
 	Serial.begin(0);
   
 	// XBee Serial (Serial1 on Pins 0 and 1)
-	Serial2.begin(BAUD);
-	xbee.setSerial(Serial2);
+	Serial1.begin(BAUD);
+	xbee.setSerial(Serial1);
 	
 	while (!Serial && millis() < 5000);
 
 	Serial.println("INFO: XBee Receiver Ready...");
 }
 
-long last = 0;
+void sendRawAPI(XBeeAddress64 address, String message);
 
 void loop() {
-	// if (millis()-last > 1000)
-	// {
-	// 	Serial.println("Sending AT command to test local communication...");
-	// 	AtCommandRequest atRequest = AtCommandRequest((uint8_t*)"ID"); // Request PAN ID
-	// 	xbee.send(atRequest);
-	// 	last = millis();
-	// }
 	xbee.readPacket();
 	if (xbee.getResponse().isAvailable())
 	{
@@ -73,28 +63,9 @@ void loop() {
 		{
 			if (inputBuffer.length() > 0)
 			{
-				String msg = inputBuffer;
-				uint8_t payload[msg.length()];
-				for (int i=0; i< msg.length(); i++)
-					payload[i] = (uint8_t) msg[i];
-
-				ZBTxRequest tx = ZBTxRequest(addrGS, payload, msg.length());
-
-				Serial.println("Address");
-				Serial.println(tx.getAddress64(), HEX);
-				Serial.println("FrameID");
-				Serial.println(tx.getFrameId());
-				Serial.println("Payload");
-				Serial.println(*tx.getPayload());
-				Serial.println("API ID");
-				Serial.println(tx.getApiId(), HEX);
-				Serial.println("Option");
-				Serial.println(tx.getOption(), HEX);
-
-				// Serial.print("INFO: sending [");
-				// Serial.print(msg);
-				// Serial.print("] ... ");
-				xbee.send(tx);
+				Serial.print("INFO: sending");
+				Serial.println(inputBuffer);
+				sendRawAPI(addrGS, inputBuffer);
 				inputBuffer = "";
 			}
 		}
@@ -104,56 +75,6 @@ void loop() {
 		}
 	}
 }
-
-void send(String msg)
-{
-	uint8_t payload[msg.length()];
-	// msg.getBytes(payload, msg.length()+1);
-	for (int i=0; i< msg.length(); i++)
-		payload[i] = (uint8_t) msg[i];
-
-	ZBTxRequest tx = ZBTxRequest(addrGS, payload, msg.length());
-
-	Serial.print("INFO: sending [");
-	Serial.print(msg);
-	Serial.print("] ... ");
-	xbee.send(tx);
-	// Serial1.flush();
-
-	/*
-	if (xbee.readPacket(2000))
-	{
-		if (xbee.getResponse().getApiId() == ZB_TX_STATUS_RESPONSE)
-		{
-			xbee.getResponse().getTxStatusResponse(txStatus);
-			if (txStatus.getStatus() == SUCCESS)
-			{
-				Serial.println("sent");
-			}
-			else
-			{
-				Serial.print("failed to send, status: ");
-				Serial.println(txStatus.getStatus(), HEX);
-			}
-		}
-		else
-		{
-			Serial.print("received unexpected frame type: 0x");
-			Serial.println(xbee.getResponse().getApiId(), HEX);
-		}
-	}
-	else if (xbee.getResponse().isError())
-	{
-		Serial.println("\nERROR: failed to read packet, code: ");
-		Serial.print(xbee.getResponse().getErrorCode());
-	}
-	else
-	{
-		Serial.println("\nWARNING: no acknowledge received");
-	}
-	*/
-}
-// */
 
 void sendRawAPI(XBeeAddress64 address, String message) {
   int payloadLen = message.length();
