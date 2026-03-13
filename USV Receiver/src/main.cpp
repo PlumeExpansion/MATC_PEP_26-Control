@@ -1,52 +1,109 @@
-#include "arduino_freertos.h"
+#include <arduino.h>
+#include <XBee.h>
 
-using namespace arduino;
+#define BAUD 38400
 
-void bootSerial()
-{
+XBeeAddress64 addrGS = XBeeAddress64(0x0013A200, 0x42839F27);
+
+XBee xbee = XBee();
+ZBRxResponse rx = ZBRxResponse();
+ZBTxStatusResponse txStatus = ZBTxStatusResponse();
+String inputBuffer = "";
+
+void send(String inputBuffer);
+
+void setup() {
 	Serial.begin(0);
-	while (!Serial && millis() < 2000) {}
+  
+	// XBee Serial (Serial1 on Pins 0 and 1)
+	Serial1.begin(BAUD);
+	xbee.setSerial(Serial1);
 	
-	if (CrashReport)
+	while (!Serial && millis() < 5000);
+	Serial.println("INFO: XBee Receiver Ready...");
+}
+
+
+void loop() {
+	xbee.readPacket();
+	if (xbee.getResponse().isAvailable())
 	{
-		Serial.print(CrashReport);
-		Serial.println();
-		Serial.flush();
+		if (xbee.getResponse().getApiId() == ZB_RX_RESPONSE)
+		{
+			xbee.getResponse().getZBRxResponse(rx);
+
+			Serial.print("INFO: Received from: ");
+			Serial.print(rx.getRemoteAddress64().getMsb(), HEX);
+			Serial.println(rx.getRemoteAddress64().getLsb(), HEX);
+
+			Serial.print("Data: ");
+			for (int i=0; i<rx.getDataLength(); i++)
+			{
+				Serial.print((char)rx.getData()[i]);
+			}
+			Serial.println();
+		}
+		else if (xbee.getResponse().isError())
+		{
+			Serial.print("ERROR: Erro reading packet, code: ");
+			Serial.println(xbee.getResponse().getErrorCode());
+		}
 	}
-	
-    Serial.println(PSTR("\r\nBooting FreeRTOS kernel " tskKERNEL_VERSION_NUMBER ". Built by gcc " __VERSION__ " (newlib " _NEWLIB_VERSION ") on " __DATE__ ". ***\r\n"));
-}
 
-void startScheduler()
-{
-	Serial.println(PSTR("Starting scheduler"));
-    Serial.flush();
-    vTaskStartScheduler();
-}
-
-static const int targetPin = 8;
-void taskTogglePin(void *)
-{
-	pinMode(targetPin, OUTPUT);
-	while (true)
+	while (Serial.available())
 	{
-		digitalWrite(targetPin, HIGH);
-		vTaskDelay(pdMS_TO_TICKS(1000));
-		digitalWrite(targetPin, LOW);
-		vTaskDelay(pdMS_TO_TICKS(1000));
+		char c = Serial.read();
+		if (c == '\n')
+		{
+			if (inputBuffer.length() > 0)
+			{
+				send(inputBuffer);
+				inputBuffer = "";
+			}
+		}
+		else
+		{
+			inputBuffer += c;
+		}
 	}
 }
 
-void setup()
+void send(String msg)
 {
-	bootSerial();
-	
-	// Serial.println("Setup and loop task running with priority ");
-	// Serial.println(uxTaskPriorityGet(NULL));
+	uint8_t payload[msg.length()];
+	msg.getBytes(payload, msg.length()+1);
 
-	xTaskCreate(taskTogglePin, "toggle pin", 128, NULL, 1, NULL);
+	ZBTxRequest tx = ZBTxRequest(addrGS, payload, msg.length());
 
-	startScheduler();
+	Serial.print("INFO: sending [");
+	Serial.print(msg);
+	Serial.print("] ... ");
+	xbee.send(tx);
+	Serial1.flush();
+
+	if (xbee.readPacket(500))
+	{
+		if (xbee.getResponse().getApiId() == ZB_TX_STATUS_RESPONSE)
+		{
+			xbee.getResponse().getZBTxStatusResponse(txStatus);
+			if (txStatus.getDeliveryStatus() == SUCCESS)
+			{
+				Serial.println("sent");
+			}
+			else
+			{
+				Serial.print("failed to send, status: ");
+				Serial.println(txStatus.getDeliveryStatus(), HEX);
+			}
+		}
+	}
+	else if (xbee.getResponse().isError())
+	{
+		Serial.println("\nERROR: failed to read packet, code: ");
+		Serial.print(xbee.getResponse().getErrorCode());
+	}
+	else
+	{
+		Serial.println("\nWARNING: no acknowledge received");
+	}
 }
-
-void loop() {}
