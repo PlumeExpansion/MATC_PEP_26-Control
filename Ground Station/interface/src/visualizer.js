@@ -3,7 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 
 import { Waterplane } from "./waterplane.js";
-import * as utils from './utils.js';
+// import * as utils from './utils.js';
 
 export class Visualizer {
 	camFollowTimeConstant = 0.5;
@@ -67,53 +67,11 @@ export class Visualizer {
 
 		// -- Groups --
 		this.bodyGroup = new THREE.Group();
-		this.raGroup = new THREE.Group();
-		this.bodyGroup.add(this.raGroup);
-		this.bodyGroup.oldPos = new THREE.Vector3();
-		this.scene.add(this.bodyGroup);
-
-		// -- Coordinate Frames --
-		this.fixedFrame = new utils.Axes();
-		this.scene.add(this.fixedFrame);
-		this.bodyFrame = new utils.Axes();
-		this.bodyGroup.add(this.bodyFrame);
-		this.rearAxleFrame = new utils.Axes();
-		this.raGroup.add(this.rearAxleFrame);
-
-		dm.callbacks.onToggleFixedFrame = () => this.fixedFrame.visible = !this.fixedFrame.visible;
-		dm.callbacks.onToggleBodyFrame = () => this.bodyFrame.visible = !this.bodyFrame.visible;
-		dm.callbacks.onToggleRearAxleFrame = () => this.rearAxleFrame.visible = !this.rearAxleFrame.visible;
 
 		// --- Model Setup ---
-		this.panels = new Map();
-		this.wingRoots = new Map([
-			['L', new WingRoot(dm.sceneConfig)],
-			['R', new WingRoot(dm.sceneConfig)]
-		]);
 		this.#initSTL();
 		this.#loadSTL();
-		this.hull = new Hull(dm.sceneConfig);
-		this.propulsor = new Propulsor(dm.sceneConfig);
 		this.bodyGroup.add(this.hull, this.wingRoots.get('L'), this.wingRoots.get('R'));
-		this.raGroup.add(this.propulsor);
-		this.components = [this.hull, this.propulsor, this.wingRoots.get('L'), this.wingRoots.get('R')];
-
-		dm.callbacks.onToggleHullAxes = () => this.hull.toggleAxes();
-		dm.callbacks.onToggleFoilAxes = () => {
-			this.panels.forEach(panel => panel.toggleAxes());
-			this.wingRoots.values().forEach(wr => wr.toggleAxes());
-		}
-		dm.callbacks.onTogglePropulsorAxes = () => this.propulsor.toggleAxes();
-		dm.callbacks.onVisuals = () => this.components.forEach(c => c.syncVisuals());
-		dm.callbacks.onWaterplaneVisuals = () => this.waterplane.syncVisuals();
-		dm.callbacks.onToggleForces = () => this.components.forEach(c => c.toggleForces());
-		dm.callbacks.onToggleMoments = () => this.components.forEach(c => c.toggleMoments());
-		dm.callbacks.onToggleSubmerged = () => this.panels.forEach(p => p.toggleSubmerged());
-		dm.callbacks.onToggleSurfaced = () => this.panels.forEach(p => p.toggleSurfaced());
-		dm.callbacks.onToggleSubmergence = () => {
-			this.panels.forEach(p => p.toggleSubmergence());
-			this.propulsor.toggleSubmergence();
-		};
 	}
 	async #initSTL() {
 		this.bufferGeom = new THREE.BufferGeometry();
@@ -130,79 +88,16 @@ export class Visualizer {
 	async #loadSTL() {
 		this.loader = new STLLoader();
 		this.hullGeometry = await this.loader.loadAsync('RBird_Hull_Remesh.stl');
-		// this.wingGeometry = await this.loader.loadAsync('Wing_Applied_Low_Poly.stl');
-		this.wingGeometry = await this.loader.loadAsync('Wing_Extended_Applied_Low_Poly.stl');
-		// this.rearWingGeometry = await this.loader.loadAsync('Rear_Extended_Applied_Low_Poly_RA_Origin.stl');
-		this.rearWingGeometry = await this.loader.loadAsync('Rear_Wing_Extended_Applied_Low_Poly_RA_Origin.stl');
-		this.buoyGeometry = await this.loader.loadAsync('Buoy.stl');
-		this.motorGeometry = await this.loader.loadAsync('Low_Poly_FlipSky-85165-150.stl');
 		
 		this.bufferGeom.dispose();
 		this.hullMesh.geometry = this.hullGeometry;
-		this.wingMesh.geometry = this.wingGeometry;
-		this.rearWingMesh.geometry = this.rearWingGeometry;
-		this.motorMesh.geometry = this.motorGeometry;
 
-		this.buoys = []
-		this.nearBuoyMesh = new THREE.Mesh(this.buoyGeometry, this.buoyMaterial);
-		this.farBuoyMesh = new THREE.Mesh(this.buoyGeometry, this.buoyMaterial);
-		this.targetBuoy = this.farBuoyMesh;
-		for (let i=0; i<this.dm.sceneConfig.maxBuoyTrailCount; i++) {
-			const buoy = new THREE.Mesh(this.buoyGeometry, this.buoyMaterial);
-			this.buoys.push(buoy);
-			this.scene.add(buoy);
-		}
-		this.motorMesh.rotateZ(-Math.PI/2);
 		this.propMesh.rotateY(Math.PI/2);
 
 		this.bodyGroup.renderOrder = 2;
 		this.raGroup.renderOrder = 1;
 		
 		this.bodyGroup.add(this.hullMesh, this.wingMesh);
-		this.raGroup.add(this.rearWingMesh, this.motorMesh, this.propMesh);
-		this.scene.add(this.nearBuoyMesh, this.farBuoyMesh);
-		this.dm.callbacks.onToggleHull = () => this.hullMesh.visible = !this.hullMesh.visible;
-		this.dm.callbacks.onToggleWings = () => this.wingMesh.visible = !this.wingMesh.visible;
-		this.dm.callbacks.onToggleRearWings = () => this.rearWingMesh.visible = !this.rearWingMesh.visible;
-		this.dm.callbacks.onStlVisuals = () => {
-			this.stlMaterial.opacity = this.dm.sceneConfig.stlOpacity;
-			this.stlMaterial.color.set(this.dm.sceneConfig.stlColor);
-		};
-		this.dm.callbacks.onStlVisuals();
-
-		this.dm.callbacks.onBuoyVisuals = () => {
-			this.nearBuoyMesh.scale.setScalar(this.dm.sceneConfig.buoyScale);
-			this.farBuoyMesh.scale.setScalar(this.dm.sceneConfig.buoyScale);
-			this.buoys.forEach(b => b.scale.setScalar(this.dm.sceneConfig.buoyScale));
-			this.buoyMaterial.color.set(this.dm.sceneConfig.buoyColor);
-			this.buoyMaterial.emissive.set(this.dm.sceneConfig.buoyColor);
-		}
-		this.dm.callbacks.onBuoyTrail = () => {
-			if (!this.nearBuoyMesh.visible) return;
-			this.buoyDelta = new THREE.Vector3().copy(this.farBuoyMesh.position).sub(this.nearBuoyMesh.position)
-				.divideScalar(this.dm.sceneConfig.buoyTrailCount+1);
-			for (let i=0; i<this.dm.sceneConfig.maxBuoyTrailCount; i++) {
-				const buoy = this.buoys[i];
-				if (i < this.dm.sceneConfig.buoyTrailCount) {
-					buoy.position.copy(this.buoyDelta).multiplyScalar(i+1).add(this.nearBuoyMesh.position);
-					buoy.visible = true;
-				} else {
-					buoy.visible = false;
-				}
-			}
-		}
-		this.dm.callbacks.onToggleBuoys = () => {
-			this.nearBuoyMesh.visible = !this.nearBuoyMesh.visible;
-			this.farBuoyMesh.visible = !this.farBuoyMesh.visible;
-			this.buoys.forEach(b => b.visible = !b.visible);
-		}
-		this.dm.callbacks.onBuoyPos = (buoy, pos) => {
-			(buoy == 'Near'? this.nearBuoyMesh : this.farBuoyMesh).position.set(pos.x, pos.y, 0);
-			this.dm.callbacks.onBuoyTrail();
-		}
-		this.dm.callbacks.onBuoyPos('Near', this.dm.sceneConfig.nearBuoyPos);
-		this.dm.callbacks.onBuoyPos('Far', this.dm.sceneConfig.farBuoyPos);
-		this.dm.callbacks.onBuoyVisuals();
 		
 		this.renderloop = this.renderloop.bind(this);
 		window.requestAnimationFrame((nowMS) => {
