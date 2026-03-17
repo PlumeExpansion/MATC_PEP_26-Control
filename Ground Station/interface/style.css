@@ -1,0 +1,16 @@
+body {
+    margin: 0;
+    overflow: hidden;
+}
+
+.tp-container {
+	position: absolute;
+	top: 10px;
+	margin: 0;
+}
+#pane-left {
+	left: 10px;
+}
+#pane-right {
+	right: 10px;
+}

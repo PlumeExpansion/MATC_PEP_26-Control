@@ -1,132 +1,177 @@
-// /*
 #include <arduino.h>
-#include <XBee.h>
+#include <VescUart.h>
 
-#define BAUD 38400
+#include "CommHandler.h"
 
-XBeeAddress64 addrGS = XBeeAddress64(0x0013A200, 0x42839F27);
+#define BAUD_XBEE 38400
+#define BAUD_ESC #
+#define SERIAL_XBEE Serial1
+#define SERIAL_ESC Serial2
 
-XBee xbee = XBee();
-ZBRxResponse rx = ZBRxResponse();
-AtCommandResponse at = AtCommandResponse();
-TxStatusResponse txStatus = TxStatusResponse();
-String inputBuffer = "";
+#define PIN_AUX #
+#define PIN_MAIN #
+#define PIN_MAIN_ECHO #
+#define PIN_COOLING #
+#define PIN_BILGE #
+#define PIN_LIN_ACT_FORW #
+#define PIN_LIN_ACT_BACK #
 
-void setup() {
+CommHandler commHandler(SERIAL_XBEE);
+VescUart ESC;
+
+void failLoop(int failMode)
+{
+	while (true)
+	{
+		digitalWrite(LED_BUILTIN, HIGH);
+		delay(1000);
+		digitalWrite(LED_BUILTIN, LOW);
+		delay(1000);
+		for (int i=0; i<failMode; i++)
+		{
+			digitalWrite(LED_BUILTIN, HIGH);
+			delay(200);
+			digitalWrite(LED_BUILTIN, LOW);
+			delay(200);
+		}
+	}
+}
+
+void setup()
+{
 	Serial.begin(0);
-  
-	// XBee Serial (Serial1 on Pins 0 and 1)
-	Serial1.begin(BAUD);
-	xbee.setSerial(Serial1);
+	pinMode(LED_BUILTIN, OUTPUT);
+	pinMode(PIN_AUX, OUTPUT);
+	pinMode(PIN_MAIN, OUTPUT);
+	pinMode(PIN_MAIN_ECHO, INPUT_PULLUP);
+	pinMode(PIN_COOLING, OUTPUT);
+	pinMode(PIN_BILGE, OUTPUT);
+	pinMode(PIN_COOLING, OUTPUT);
+	pinMode(PIN_BILGE, OUTPUT);
+	pinMode(PIN_LIN_ACT_FORW, OUTPUT);
+	pinMode(PIN_LIN_ACT_BACK, OUTPUT);
+
+	SERIAL_XBEE.begin(BAUD_XBEE);
+	SERIAL_ESC.begin(BAUD_ESC);
 	
-	while (!Serial && millis() < 5000);
+	while (!Serial && millis() < 2000);
+	Serial.printf("INFO [%lu]: serial initialized\n", millis());
 
-	Serial.println("INFO: XBee Receiver Ready...");
-}
-
-void sendRawAPI(XBeeAddress64 address, String message);
-
-void loop() {
-	xbee.readPacket();
-	if (xbee.getResponse().isAvailable())
+	while (!SERIAL_XBEE)
 	{
-		if (xbee.getResponse().getApiId() == ZB_RX_RESPONSE)
+		if (millis() > 5000)
 		{
-			xbee.getResponse().getZBRxResponse(rx);
-
-			Serial.print("INFO: received from: ");
-			Serial.print(rx.getRemoteAddress64().getMsb(), HEX);
-			Serial.println(rx.getRemoteAddress64().getLsb(), HEX);
-
-			Serial.print("Data: ");
-			for (int i=0; i<rx.getDataLength(); i++)
-			{
-				Serial.print((char)rx.getData()[i]);
-			}
-			Serial.println();
-		}
-		else if (xbee.getResponse().isError())
-		{
-			Serial.print("ERROR: Erro reading packet, code: ");
-			Serial.println(xbee.getResponse().getErrorCode());
-		}
-		else if (xbee.getResponse().getApiId() != ZB_TX_STATUS_RESPONSE)
-		{
-			Serial.print("INFO: received response, id: ");
-			Serial.println(xbee.getResponse().getApiId(), HEX);
+			Serial.printf("ERROR [%lu]: XBee serial failed to initialize\n", millis());
+			failLoop(0);
 		}
 	}
+	Serial.printf("INFO [%lu]: XBee serial initialized\n", millis());
 
-	while (Serial.available())
+	while (!SERIAL_ESC)
 	{
-		char c = Serial.read();
-		Serial.print(c);
-		if (c == '\n')
+		if (millis() > 5000)
 		{
-			if (inputBuffer.length() > 0)
-			{
-				sendRawAPI(addrGS, inputBuffer);
-				inputBuffer = "";
-			}
+			Serial.printf("ERROR [%lu]: ESC serial failed to initialize\n", millis());
+			failLoop(1);
 		}
-		else
-		{
-			inputBuffer += c;
-		}
+	}
+	Serial.printf("INFO [%lu]: ESC serial initialized\n", millis());
+	ESC.setSerialPort(&SERIAL_ESC);
+	if (ESC.getFWversion())
+	{
+		Serial.printf("INFO: [%lu]: ESC running firmware version \"%lu.%lu\"\n", millis(), ESC.fw_version.major, ESC.fw_version.minor);
+	}
+	else
+	{
+		Serial.printf("ERROR [%lu]: ESC failed to initialize\n", millis());
+		failLoop(2);
+	}
+	
+	Serial.printf("INFO [%lu]: USV initialized\n", millis());
+}
+
+uint32_t lastESC;
+bool escLinkActive;
+bool gsLinkActive;
+bool controlledContactor;
+void getData(uint32_t now)
+{
+	commHandler.mainEcho = digitalRead(PIN_MAIN_ECHO) == LOW;
+	if (ESC.getVescValues())
+	{
+		lastESC = now;
+		escLinkActive = true;
 	}
 }
 
-void sendRawAPI(XBeeAddress64 address, String message) {
-  int payloadLen = message.length();
-  
-  // 1. Frame Header: Start Delimiter(1) + Length(2)
-  // Length is everything from Frame Type to Checksum (excluding those)
-  // For 0x10 frame: Type(1) + ID(1) + Addr(8) + 16BitAddr(2) + Radius(1) + Opt(1) + Payload(n)
-  uint16_t frameLen = 14 + payloadLen;
+void checkSafety(uint32_t now)
+{
+	if (gsLinkActive && now - commHandler.lastReceived > 1000)
+	{
+		gsLinkActive = false;
+		commHandler.throttle = 0;
+		commHandler.steering = 0;
+		Serial.printf("WARNING [%lu]: GS link lost, nulling controls\n", now);
+	}
+	if (escLinkActive && now - lastESC > 1000)
+	{
+		escLinkActive = false;
+		commHandler.mainOffStamp = now;
+		commHandler.throttle = 0;
+		commHandler.steering = 0;
+		commHandler.mainEnable = false;
+		Serial.printf("WARNING [%lu]: ESC link lost, cutting main power\n", now);
+	}
+	if (controlledContactor && !commHandler.mainEnable && commHandler.mainEcho && now - commHandler.mainOffStamp > 1000)
+	{
+		controlledContactor = false;
+		commHandler.auxEnable = false;
+		commHandler.throttle = 0;
+		commHandler.steering = 0;
+		Serial.printf("WARNING [%lu]: contactor still energized, cutting auxiliary power\n", now);
+	}
+}
 
-  // 2. Construct the Frame Payload (for Checksum)
-  uint8_t frame[15 + payloadLen]; 
-  int pos = 0;
+void setControls(uint32_t now)
+{
+	if (gsLinkActive && escLinkActive && controlledContactor)
+	{
+		commHandler.mainEnable = commHandler.cmds.main;
+		commHandler.auxEnable = commHandler.cmds.aux;
+		commHandler.throttle = commHandler.cmds.throttle;
+		commHandler.steering = commHandler.cmds.steering;
+	}
+	ESC.setDuty(commHandler.throttle);
+	// TODO: add encoder
+	if (commHandler.steering > 0)
+	{
+		analogWrite(PIN_LIN_ACT_FORW, (int)(commHandler.steering*256));
+		digitalWrite(PIN_LIN_ACT_BACK, LOW);
+	}
+	else
+	{
+		analogWrite(PIN_LIN_ACT_BACK, (int)(-commHandler.steering*256));
+		digitalWrite(PIN_LIN_ACT_FORW, LOW);
+	}
+	analogWrite(PIN_COOLING, (int)((float)commHandler.cmds.cooling*256/255));
+	analogWrite(PIN_BILGE, (int)((float)commHandler.cmds.bilge*256/255));
+	digitalWrite(PIN_MAIN, commHandler.mainEnable? HIGH : LOW);
+	digitalWrite(PIN_AUX, commHandler.auxEnable? HIGH : LOW);
+}
 
-  frame[pos++] = 0x10;          // Frame Type (Transmit Request)
-  frame[pos++] = 0x01;          // Frame ID (Set to 0x01 to get an ACK)
-  
-  // 64-bit Destination Address (MSB first)
-  frame[pos++] = (uint8_t)(address.getMsb() >> 24);
-  frame[pos++] = (uint8_t)(address.getMsb() >> 16);
-  frame[pos++] = (uint8_t)(address.getMsb() >> 8);
-  frame[pos++] = (uint8_t)(address.getMsb());
-  frame[pos++] = (uint8_t)(address.getLsb() >> 24);
-  frame[pos++] = (uint8_t)(address.getLsb() >> 16);
-  frame[pos++] = (uint8_t)(address.getLsb() >> 8);
-  frame[pos++] = (uint8_t)(address.getLsb());
+#define LOOP_RATE 100
+uint32_t now;
+uint32_t last;
+void loop()
+{
+	now = millis();
+	if (now-last < 1000/LOOP_RATE) return;
+	last = now;
+	commHandler.read(now, &controlledContactor);
+	
+	getData(now);
+	checkSafety(now);
+	setControls(now);
 
-  frame[pos++] = 0xFF;          // Reserved 16-bit address (0xFFFE)
-  frame[pos++] = 0xFE;
-  frame[pos++] = 0x00;          // Broadcast Radius (0 = max)
-  frame[pos++] = 0x00;          // Transmit Options
-
-  // Data Payload
-  for (int i = 0; i < payloadLen; i++) {
-    frame[pos++] = (uint8_t)message[i];
-  }
-
-  // 3. Calculate Checksum
-  // To calculate: FF - (sum of all bytes after length and before checksum)
-  long sum = 0;
-  for (int i = 0; i < pos; i++) {
-    sum += frame[i];
-  }
-  uint8_t checksum = 0xFF - (sum & 0xFF);
-
-  // 4. Send the Packet
-  Serial1.write(0x7E);              // Start Delimiter
-  Serial1.write((frameLen >> 8) & 0xFF); // Length High
-  Serial1.write(frameLen & 0xFF);        // Length Low
-  Serial1.write(frame, pos);        // The actual frame
-  Serial1.write(checksum);          // Checksum
-  Serial1.flush();
-
-  Serial.print("INFO sending: ");
-  Serial.println(message);
+	commHandler.send(now, ESC, gsLinkActive, escLinkActive, controlledContactor);
 }
