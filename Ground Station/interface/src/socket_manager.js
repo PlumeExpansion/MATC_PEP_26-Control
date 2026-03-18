@@ -1,17 +1,13 @@
 export class SocketManager {
-	constructor(dm, viz) {
+	constructor(dm) {
 		this.dm = dm;
-		this.viz = viz;
 		this.socket = null;
 
 		this.onMessageReceived = (msg) => {
-			if (msg['type'] == 'build') {
-				dm.setBuildTelem(msg);
-				viz.build(msg);
-				viz.buildPropeller();
+			if (msg['type'] == 'cmds') {
+				dm.syncCmds(msg['data']);
 			} else if (msg['type'] == 'telem') {
-				dm.setTelem(msg);
-				viz.telem(msg);
+				dm.syncTelem(msg['data']);
 			} else {
 				console.log('WARNING: unknown data received', msg)
 			}
@@ -29,25 +25,14 @@ export class SocketManager {
 		dm.callbacks.onInput = (detail) => {
 			if (detail.origin != 'internal') return;
 			const inputMapped = {
-				x: dm.queryMapped(detail.value.x, dm.constants.psi_ra_params),
-				y: dm.queryMapped(detail.value.y, dm.constants.V_params)
+				x: dm.queryMapped(detail.value.x, dm.throttle_params),
+				y: dm.queryMapped(detail.value.y, dm.throttle_params)
 			};
 			this.send({ type: 'set', state: 'input', value: inputMapped });
 		}
-		dm.callbacks.onToggleRun = () => this.send({ type: 'sim' });
-		dm.callbacks.onStep = () => {
-			viz.syncFlag = true;
-			this.send({ type: 'step', dt: dm.controlStates.dt });
-		};
-		dm.callbacks.onExport = () => this.send({ type: 'export' })
-		dm.callbacks.onReset = () => {
-			viz.syncFlag = true;
-			this.send({ type: 'reset' });
-		};
-		dm.callbacks.onReinit = () => {
-			viz.syncFlag = true;
-			this.send({ type: 'reinit' });
-		}
+		dm.callbacks.onNull = () => this.send({ type: 'null' });
+		dm.callbacks.onReset = () => this.send({ type: 'reset' });
+		dm.callbacks.onEstop = () => this.send({ type: 'estop' });
 	}
 	connect(url) {
 		if (this.socket != null) return;

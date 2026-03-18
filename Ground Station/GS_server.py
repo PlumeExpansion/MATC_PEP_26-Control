@@ -33,7 +33,7 @@ async def reset_flags():
 	print(f'INFO: resetting flags')
 
 async def sync_cmds(socket):
-	socket.send(json.dumps({'type': 'sync', 'data': USVS.cmds}))
+	socket.send(json.dumps({'type': 'cmds', 'data': USVS.cmds}))
 
 async def sync_telem(socket):
 	socket.send(json.dumps({'type': 'telem', 'data': USVS.telem}))
@@ -55,6 +55,7 @@ try:
 	# device.serial_port.rtscts = True # type: ignore # Enable Flow Control for the Waveshare board
 except Exception as e:
 	print(f'ERROR: XBee initialization failed - {e}')
+	exit()
 
 remote_addr = XBee64BitAddress.from_hex_string(MAC_USV_RN)
 remote_device = RemoteXBeeDevice(device, remote_addr)
