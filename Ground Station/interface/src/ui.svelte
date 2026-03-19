@@ -21,10 +21,12 @@
 	<Folder title='Commands' disabled={!isConnected} >
 		<Button on:click={() => dm.callbacks.onEstop()} title='Emergency Stop' />
 		<Folder title='Auxiliary'>
+			<Monitor label='Status' value={dm.telem.auxEnable? 'Enabled' : 'Disabled'}/>
 			<Button title='Enable' disabled={dm.telem.auxEnable} on:click={() => dm.callbacks.onStateChange('aux',true)} />
 			<Button title='Disable' disabled={!dm.telem.auxEnable} on:click={() => dm.callbacks.onStateChange('aux',false)} />
 		</Folder>
 		<Folder title='Main'>
+			<Monitor label='Status' value={dm.telem.mainEnable? 'Enabled' : 'Disabled'}/>
 			<Button title='Enable' disabled={dm.telem.mainEnable} on:click={() => dm.callbacks.onStateChange('main',true)} />
 			<Button title='Disable' disabled={!dm.telem.mainEnable} on:click={() => dm.callbacks.onStateChange('main',false)} />
 			<Monitor label='Energized' value={dm.telem.mainEcho} disabled={!dm.telem.usvLinkActive} />

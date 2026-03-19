@@ -11,6 +11,7 @@
 #define TIMEOUT_ESC 20
 #define LOOP_RATE 100
 #define TELEM_RATE 5
+#define STEERING_DEADZONE 0.01
 
 #define PIN_AUX 4
 #define PIN_MAIN 5
@@ -166,15 +167,20 @@ void setControls(uint32_t now)
 	ESC.setDuty(commHandler.throttle);
 	
 	// TODO: add encoder
-	if (commHandler.steering > 0)
+	if (commHandler.steering > STEERING_DEADZONE)
 	{
 		analogWrite(PIN_LIN_ACT_FORW, (int)(commHandler.steering*256));
-		digitalWrite(PIN_LIN_ACT_BACK, LOW);
+		analogWrite(PIN_LIN_ACT_BACK, LOW);
+	}
+	else if (commHandler.steering < -STEERING_DEADZONE)
+	{
+		analogWrite(PIN_LIN_ACT_BACK, (int)(-commHandler.steering*256));
+		analogWrite(PIN_LIN_ACT_FORW, LOW);
 	}
 	else
 	{
-		analogWrite(PIN_LIN_ACT_BACK, (int)(-commHandler.steering*256));
-		digitalWrite(PIN_LIN_ACT_FORW, LOW);
+		analogWrite(PIN_LIN_ACT_FORW, LOW);
+		analogWrite(PIN_LIN_ACT_BACK, LOW);
 	}
 	analogWrite(PIN_COOLING, (int)((float)commHandler.cmds.cooling*256/255));
 	analogWrite(PIN_BILGE, (int)((float)commHandler.cmds.bilge*256/255));
