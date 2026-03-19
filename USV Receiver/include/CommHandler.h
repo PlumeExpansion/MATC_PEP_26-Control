@@ -47,7 +47,7 @@ public:
 	bool mainEnable;
 	bool auxEnable;
 	bool mainEcho;
-	void read(uint32_t now, bool* controlledContactorPtr);
+	void read(uint32_t now, bool* gsLinkActivePtr, bool* controlledContactorPtr);
 	void send(uint32_t now, VescUart& ESC, bool gsLinkActive, bool escLinkActive, bool controlledContactor);
 	uint32_t mainOffStamp;
 	uint32_t lastReceived;

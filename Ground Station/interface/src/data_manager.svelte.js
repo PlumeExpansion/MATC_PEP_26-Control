@@ -70,8 +70,8 @@ export class DataManager {
 	syncCmds(data) {
 		this.cmds.input.y = data['throtte'];
 		this.cmds.input.x = data['steering'];
-		this.cmds.cooling = data['cooling'];
-		this.cmds.bilge = data['bilge'];
+		this.cmds.cooling = data['cooling']/255;
+		this.cmds.bilge = data['bilge']/255;
 		this.cmds.main = data['main'];
 		this.cmds.aux = data['aux'];
 	}
@@ -96,7 +96,7 @@ export class DataManager {
 		this.telem.controlledContactor = data['controlledContactor'];
 		this.telem.time = data['time'];
 
-		this.usvLinkActive = data['usvLinkActive'];
-		this.rssi = data['rssi'];
+		this.telem.usvLinkActive = data['usvLinkActive'];
+		this.telem.rssi = data['rssi'];
 	}
 }

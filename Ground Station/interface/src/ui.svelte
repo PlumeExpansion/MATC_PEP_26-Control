@@ -18,7 +18,7 @@
 			title={connectBtnTitle}
 			disabled={!isDisconnected} />
 	</Folder>
-	<Folder title='Commands'>
+	<Folder title='Commands' disabled={!isConnected} >
 		<Button on:click={() => dm.callbacks.onEstop()} title='Emergency Stop' />
 		<Folder title='Auxiliary'>
 			<Button title='Enable' disabled={dm.telem.auxEnable} on:click={() => dm.callbacks.onStateChange('aux',true)} />
@@ -31,15 +31,19 @@
 		</Folder>
 		<Folder title='Flags'>
 			<Monitor label='USV Link' value={dm.telem.usvLinkActive} />
-			<Monitor label='rssi' value={dm.telem.rssi} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(0)} />
+			<Monitor label='rssi [dBm]' value={dm.telem.rssi} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(0)} />
 			<Monitor label='GS Link' value={dm.telem.gsLinkActive} disabled={!dm.telem.usvLinkActive} />
 			<Monitor label='ESC Link' value={dm.telem.escLinkActive} disabled={!dm.telem.usvLinkActive}  />
 			<Monitor label='Contactor Ctrl' value={dm.telem.controlledContactor} disabled={!dm.telem.usvLinkActive} />
 			<Button on:click={() => dm.callbacks.onReset()} title='Reset' disabled={!dm.telem.usvLinkActive} />
 		</Folder>
 		<Folder title='Pumps'>
-			<Slider bind:value={dm.cmds.cooling} label='Cooling' min={0} max={1} format={v => v.toFixed(2)} />
-			<Slider bind:value={dm.cmds.bilge} label='Bilge' min={0} max={1} format={v => v.toFixed(2)} />
+			<Slider bind:value={dm.cmds.cooling} label='Cooling' min={0} max={1} format={v => v.toFixed(2)} on:change={ev => {
+				if (ev.detail.origin == 'internal') dm.callbacks.onStateChange('cooling',Math.trunc(ev.detail.value*255))
+			}} />
+			<Slider bind:value={dm.cmds.bilge} label='Bilge' min={0} max={1} format={v => v.toFixed(2)} on:change={ev => {
+				if (ev.detail.origin == 'internal') dm.callbacks.onStateChange('bilge',Math.trunc(ev.detail.value*255))
+			}}/>
 		</Folder>
 		<Folder title='Drive'>
 			<Button on:click={() => {
@@ -58,7 +62,11 @@
 	</Folder>
 </Pane>
 
-<Pane title='Telemetry' x={window.innerWidth} y={0} width={300} localStoreId='rightPane'>
+<Pane title='Telemetry' x={window.innerWidth} y={0} width={300} localStoreId='rightPane' >
+	<Folder title='drive'>
+		<Monitor label='steering [%]' value={dm.telem.steering*100} format={v => v.toFixed(0)} />
+		<Monitor label='throttle [%]' value={dm.telem.throttle*100} format={v => v.toFixed(0)} />
+	</Folder>
 	<Folder title='ESC'>
 		<Monitor label='motor current [A]' value={dm.telem.ESC.motorCurrent} format={v => v.toFixed(2)} />
 		<Monitor label='input current [A]' value={dm.telem.ESC.inputCurrent} format={v => v.toFixed(2)} />

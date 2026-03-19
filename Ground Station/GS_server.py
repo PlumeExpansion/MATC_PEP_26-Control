@@ -4,6 +4,7 @@ import json
 import time
 from digi.xbee.devices import XBeeDevice, RemoteXBeeDevice
 from digi.xbee.models.address import XBee64BitAddress
+from digi.xbee.packets.common import ATCommPacket, ATCommResponsePacket
 import serial.tools.list_ports as list_ports
 
 import os
@@ -26,17 +27,22 @@ async def estop():
 	USVS.cmds['bilge'] = 0
 	USVS.cmds['aux'] = False
 	USVS.cmds['main'] = False
+	device.send_data_async(remote_device, USVS.pack_aux())
+	device.send_data_async(remote_device, USVS.pack_main())
+	device.send_data_async(remote_device, USVS.pack_bilge())
+	device.send_data_async(remote_device, USVS.pack_cooling())
+	for socket in sockets: await sync_cmds(socket)
 	print(f'INFO: emergency stop, cutting all power')
 
 async def reset_flags():
-	device.send_data_async(remote_device, USVS.RESET_CMD)
+	device.send_data_async(remote_device, USVS.pack_reset())
 	print(f'INFO: resetting flags')
 
 async def sync_cmds(socket):
-	socket.send(json.dumps({'type': 'cmds', 'data': USVS.cmds}))
+	await socket.send(json.dumps({'type': 'cmds', 'data': USVS.cmds}))
 
 async def sync_telem(socket):
-	socket.send(json.dumps({'type': 'telem', 'data': USVS.telem}))
+	await socket.send(json.dumps({'type': 'telem', 'data': USVS.telem}))
 
 # --- Xbee Link ---
 BAUD = 38400
@@ -61,19 +67,22 @@ remote_addr = XBee64BitAddress.from_hex_string(MAC_USV_RN)
 remote_device = RemoteXBeeDevice(device, remote_addr)
 
 last_received = 0
-async def on_data_received(xbee_message):
+def on_data_received(xbee_message):
 	global last_received
-	sender = xbee_message.remote_device.get_64bit_addr()
-	if (sender != MAC_USV_RN):
-		print(f'WARNING: received from unknown address - {sender}')
-		return
+	# sender = xbee_message.remote_device.get_64bit_addr()
+	# if (sender != MAC_USV_RN):
+	# 	print(f'WARNING: received from unknown address - {sender}')
+	# 	return
 	last_received = time.perf_counter()
-	rssi_val = device.get_parameter("DB")
-	USVS.telem['rssi'] = -int.from_bytes(rssi_val, byteorder="big")
 	USVS.unpack_telem(xbee_message.data)
-	for socket in sockets: await sync_telem(socket)
+
+def packet_received_callback(packet):
+	if isinstance(packet, ATCommResponsePacket):
+		if packet.command == "DB":
+			USVS.telem['rssi'] = -packet.command_value[0] # type: ignore
 
 device.add_data_received_callback(on_data_received)
+device.add_packet_received_callback(packet_received_callback)
 
 # --- Joystick Link ---
 pygame.init()
@@ -94,8 +103,10 @@ else:
 		print(f'ERROR: controller link failed - {e}')
 
 # --- Network Handlers ---
-valid_states = ['main','aux','cooling','bilge']
+transmit_cooling = False
+transmit_bilge = False
 async def handler(socket: websockets.ServerConnection):
+	global transmit_bilge, transmit_cooling
 	sockets.add(socket)
 	print(f'INFO: connected to {socket.remote_address}')
 	await sync_cmds(socket)
@@ -107,8 +118,18 @@ async def handler(socket: websockets.ServerConnection):
 				dataType = data['type']
 				if dataType == 'set':
 					state, value = data['state'], data['value']
-					if state in valid_states:
-						USVS.cmds[state] = value
+					if state == 'main':
+						USVS.cmds['main'] = value
+						device.send_data_async(remote_device, USVS.pack_main())
+					elif state == 'aux':
+						USVS.cmds['aux'] = value
+						device.send_data_async(remote_device, USVS.pack_aux())
+					elif state == 'cooling':
+						USVS.cmds['cooling'] = value
+						transmit_cooling = True
+					elif state == 'bilge':
+						USVS.cmds['bilge'] = value
+						transmit_bilge = True
 					elif state == 'input':
 						if (controller is None):
 							USVS.cmds['throttle'] = value['y']
@@ -132,10 +153,15 @@ async def handler(socket: websockets.ServerConnection):
 		if not sockets: print(f'WARNING: no remaining sockets')
 
 # --- Background Loops ---
-last_transmit = 0
 async def transmit_loop(transmit_task):
+	global transmit_cooling, transmit_bilge
+
 	loop_rate = 100
-	transmit_rate = 30
+	transmit_rate = 20
+	rssi_rate = 10
+
+	last_transmit = 0
+	last_rssi = 0
 	try:
 		while True:
 			# broadcast commands
@@ -144,6 +170,21 @@ async def transmit_loop(transmit_task):
 			if now - last_transmit > 1/transmit_rate:
 				last_transmit = now
 				device.send_data_async(remote_device, USVS.pack_drive())
+
+				if transmit_cooling:
+					transmit_cooling = False
+					device.send_data_async(remote_device, USVS.pack_cooling())
+				if transmit_bilge:
+					transmit_bilge = False
+					device.send_data_async(remote_device, USVS.pack_bilge())
+			
+			if now - last_rssi > 1/rssi_rate:
+				last_rssi = now
+				at_db_packet = ATCommPacket(frame_id=1, command='DB')
+				device.send_packet(at_db_packet)
+				
+			# sync telem
+			for socket in sockets: await sync_telem(socket)
 
 			await asyncio.sleep(1/loop_rate)
 	except asyncio.CancelledError:
@@ -179,17 +220,17 @@ async def console_loop():
 			else:
 				print(f'INFO: USV link inactive, last received {int(time.perf_counter() - last_received)} second(s) ago')
 		elif cmd in throttle_sentinel:
-			print(f'INFO: throttle at {int(100*USVS.telem['echo']['throttle'])}%\ttarget: {int(100*USVS.cmds['throttle'])}%')
+			print(f'INFO: throttle - current: {int(100*USVS.telem['throttle'])}%\ttarget: {int(100*USVS.cmds['throttle'])}%')
 		elif cmd in steering_sentinel:
-			print(f'INFO: steering at {int(100*USVS.telem['echo']['steering'])}%\ttarget: {int(100*USVS.cmds['steering'])}%')
+			print(f'INFO: steering - current: {int(100*USVS.telem['steering'])}%\ttarget: {int(100*USVS.cmds['steering'])}%')
 		elif cmd == 'cooling':
 			print(f'INFO: cooling at {int(100*USVS.cmds['cooling']/255)}%')
 		elif cmd == 'bilge':
 			print(f'INFO: bilge at {int(100*USVS.cmds['bilge']/255)}%')
 		elif cmd == 'aux':
-			print(f'INFO: auxiliary power {'enabled' if USVS.telem['echo']['aux'] else 'disabled'}\ttarget: {'enabled' if USVS.cmds['aux'] else 'disabled'}')
+			print(f'INFO: auxiliary power - current: {'enabled' if USVS.telem['auxEnable'] else 'disabled'}\ttarget: {'enabled' if USVS.cmds['aux'] else 'disabled'}')
 		elif cmd == 'main':
-			print(f'INFO: main power {'enabled' if USVS.telem['echo']['main'] else 'disabled'}\ttarget: {'enabled' if USVS.cmds['main'] else 'disabled'}')
+			print(f'INFO: main power - current: {'enabled' if USVS.telem['mainEnable'] else 'disabled'}\ttarget: {'enabled' if USVS.cmds['main'] else 'disabled'}')
 		elif cmd in estop_sentinel:
 			await estop()
 		elif len(tokens) == 2:
@@ -219,7 +260,9 @@ async def console_loop():
 				try:
 					percent = float(arg)
 					if 0 <= percent <= 100:
-						USVS.cmds['cooling'] = 255*int(percent/100)
+						USVS.cmds['cooling'] = int(percent/100)
+						device.send_data_async(remote_device, USVS.pack_cooling())
+						for socket in sockets: await sync_cmds(socket)
 						print(f'INFO: cooling set to {int(percent)}%')
 					else:
 						print(f'ERROR: invalid cooling percent - {arg}')
@@ -229,7 +272,9 @@ async def console_loop():
 				try:
 					percent = float(arg)
 					if 0 <= percent <= 100:
-						USVS.cmds['bilge'] = 255*int(percent/100)
+						USVS.cmds['bilge'] = int(255*percent/100)
+						device.send_data_async(remote_device, USVS.pack_bilge())
+						for socket in sockets: await sync_cmds(socket)
 						print(f'INFO: bilge set to {int(percent)}%')
 					else:
 						print(f'ERROR: invalid bilge percent - {arg}')
@@ -242,6 +287,8 @@ async def console_loop():
 				else:
 					USVS.cmds['aux'] = False
 					print(f'INFO: auxiliary power disabled')
+				for socket in sockets: await sync_cmds(socket)
+				device.send_data_async(remote_device, USVS.pack_aux())
 			elif cmd == 'main':
 				if arg in enable_sentinel:
 					USVS.cmds['main'] = True
@@ -249,6 +296,8 @@ async def console_loop():
 				else:
 					USVS.cmds['main'] = False
 					print(f'INFO: main power disabled')
+				for socket in sockets: await sync_cmds(socket)
+				device.send_data_async(remote_device, USVS.pack_main())
 			else:
 				print(f'WARNING: unknown augmented command received - {cmd} - {arg}')
 		else:
@@ -299,5 +348,6 @@ async def main():
 				print(f'INFO: termination completed with {len(results)} error(s) - {results}')
 			else:
 				print(f'INFO: termination complete')
+			device.close()
 
 if __name__ == '__main__': asyncio.run(main())

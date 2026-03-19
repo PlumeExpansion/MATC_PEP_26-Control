@@ -18,9 +18,9 @@ export class SocketManager {
 		}
 
 		dm.callbacks.onConnect = (url) => this.connect(url);
-		dm.callbacks.onStateChange = (state, detail) => {
-			if (detail.origin == 'internal')
-				this.send({ type: 'set', state: state, value: detail.value });
+		dm.callbacks.onStateChange = (state, value) => {
+			// if (detail.origin == 'internal')
+			this.send({ type: 'set', state: state, value: value });
 		};
 		dm.callbacks.onInput = (detail) => {
 			if (detail.origin != 'internal') return;

@@ -4,20 +4,24 @@
 #include "CommHandler.h"
 
 #define BAUD_XBEE 38400
-#define BAUD_ESC #
-#define SERIAL_XBEE Serial1
-#define SERIAL_ESC Serial2
+#define BAUD_ESC 115200
+#define SERIAL_XBEE Serial4
+#define SERIAL_ESC Serial1
 
-#define PIN_AUX #
-#define PIN_MAIN #
-#define PIN_MAIN_ECHO #
-#define PIN_COOLING #
-#define PIN_BILGE #
-#define PIN_LIN_ACT_FORW #
-#define PIN_LIN_ACT_BACK #
+#define TIMEOUT_ESC 20
+#define LOOP_RATE 100
+#define TELEM_RATE 5
+
+#define PIN_AUX 4
+#define PIN_MAIN 5
+#define PIN_MAIN_ECHO 6
+#define PIN_COOLING 7
+#define PIN_BILGE 8
+#define PIN_LIN_ACT_FORW 9
+#define PIN_LIN_ACT_BACK 10
 
 CommHandler commHandler(SERIAL_XBEE);
-VescUart ESC;
+VescUart ESC(TIMEOUT_ESC);
 
 void failLoop(int failMode)
 {
@@ -77,26 +81,33 @@ void setup()
 	}
 	Serial.printf("INFO [%lu]: ESC serial initialized\n", millis());
 	ESC.setSerialPort(&SERIAL_ESC);
-	if (ESC.getFWversion())
-	{
-		Serial.printf("INFO: [%lu]: ESC running firmware version \"%lu.%lu\"\n", millis(), ESC.fw_version.major, ESC.fw_version.minor);
-	}
-	else
-	{
-		Serial.printf("ERROR [%lu]: ESC failed to initialize\n", millis());
-		failLoop(2);
-	}
+	// // ESC.getVescValues
+	// if (ESC.getVescValues())
+	// {
+	// 	Serial.printf("INFO: [%lu]: ESC running firmware version \"%lu.%lu\"\n", millis(), ESC.fw_version.major, ESC.fw_version.minor);
+	// }
+	// else
+	// {
+	// 	Serial.printf("ERROR [%lu]: ESC failed to initialize\n", millis());
+	// 	failLoop(2);
+	// }
 	
 	Serial.printf("INFO [%lu]: USV initialized\n", millis());
 }
 
 uint32_t lastESC;
-bool escLinkActive;
-bool gsLinkActive;
-bool controlledContactor;
+bool escLinkActive = true;
+bool gsLinkActive = true;
+bool controlledContactor = true;
 void getData(uint32_t now)
 {
 	commHandler.mainEcho = digitalRead(PIN_MAIN_ECHO) == LOW;
+	// bool getFW = ESC.getFWversion();
+	// bool getVal = ESC.getVescValues();
+	// Serial.print("getFW: ");
+	// Serial.print(getFW);
+	// Serial.print("\tgetVal: ");
+	// Serial.println(getVal);
 	if (ESC.getVescValues())
 	{
 		lastESC = now;
@@ -106,12 +117,20 @@ void getData(uint32_t now)
 
 void checkSafety(uint32_t now)
 {
-	if (gsLinkActive && now - commHandler.lastReceived > 1000)
+	if (gsLinkActive)
 	{
-		gsLinkActive = false;
-		commHandler.throttle = 0;
-		commHandler.steering = 0;
-		Serial.printf("WARNING [%lu]: GS link lost, nulling controls\n", now);
+		digitalWrite(LED_BUILTIN, HIGH);
+		if (now - commHandler.lastReceived > 1000)
+		{
+			gsLinkActive = false;
+			commHandler.throttle = 0;
+			commHandler.steering = 0;
+			Serial.printf("WARNING [%lu]: GS link lost, nulling controls\n", now);
+		}
+	}
+	else
+	{
+		digitalWrite(LED_BUILTIN, LOW);
 	}
 	if (escLinkActive && now - lastESC > 1000)
 	{
@@ -134,14 +153,18 @@ void checkSafety(uint32_t now)
 
 void setControls(uint32_t now)
 {
-	if (gsLinkActive && escLinkActive && controlledContactor)
+	if (controlledContactor)
 	{
-		commHandler.mainEnable = commHandler.cmds.main;
 		commHandler.auxEnable = commHandler.cmds.aux;
-		commHandler.throttle = commHandler.cmds.throttle;
-		commHandler.steering = commHandler.cmds.steering;
+		if (gsLinkActive)
+		{
+			commHandler.throttle = commHandler.cmds.throttle;
+			commHandler.steering = commHandler.cmds.steering;
+			commHandler.mainEnable = commHandler.cmds.main;
+		}
 	}
 	ESC.setDuty(commHandler.throttle);
+	
 	// TODO: add encoder
 	if (commHandler.steering > 0)
 	{
@@ -159,19 +182,21 @@ void setControls(uint32_t now)
 	digitalWrite(PIN_AUX, commHandler.auxEnable? HIGH : LOW);
 }
 
-#define LOOP_RATE 100
 uint32_t now;
 uint32_t last;
+uint32_t lastTelem;
 void loop()
 {
 	now = millis();
 	if (now-last < 1000/LOOP_RATE) return;
 	last = now;
-	commHandler.read(now, &controlledContactor);
+	commHandler.read(now, &gsLinkActive, &controlledContactor);
 	
 	getData(now);
 	checkSafety(now);
 	setControls(now);
 
+	if (now-lastTelem < 1000/TELEM_RATE) return;
+	lastTelem = now;
 	commHandler.send(now, ESC, gsLinkActive, escLinkActive, controlledContactor);
 }

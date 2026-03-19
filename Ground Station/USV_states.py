@@ -45,9 +45,10 @@ telem = {
 
 def pack_drive(): return struct.pack("<Bff", DRIVE_CMD, cmds['throttle'], cmds['steering'])
 def pack_cooling(): return struct.pack("<BB", COOLING_CMD, cmds['cooling'])
-def pack_bilge(): return struct.pack("<BB", COOLING_CMD, cmds['bilge'])
-def pack_main(): return struct.pack("<B?", COOLING_CMD, cmds['main'])
-def pack_aux(): return struct.pack("<B?", COOLING_CMD, cmds['aux'])
+def pack_bilge(): return struct.pack("<BB", BILGE_CMD, cmds['bilge'])
+def pack_main(): return struct.pack("<B?", MAIN_CMD, cmds['main'])
+def pack_aux(): return struct.pack("<B?", AUX_CMD, cmds['aux'])
+def pack_reset(): return struct.pack("<B", RESET_CMD)
 
 TELEM_FMT = "<ffBfffffffffI"
 TELEM_SIZE = struct.calcsize(TELEM_FMT)
