@@ -65,11 +65,11 @@
 </Pane>
 
 <Pane title='Telemetry' x={window.innerWidth} y={0} width={300} localStoreId='rightPane' >
-	<Folder title='drive'>
+	<Folder title='drive' disabled={!dm.telem.usvLinkActive} >
 		<Monitor label='steering [%]' value={dm.telem.steering*100} format={v => v.toFixed(0)} />
 		<Monitor label='throttle [%]' value={dm.telem.throttle*100} format={v => v.toFixed(0)} />
 	</Folder>
-	<Folder title='ESC'>
+	<Folder title='ESC' disabled={!dm.telem.escLinkActive} >
 		<Monitor label='motor current [A]' value={dm.telem.ESC.motorCurrent} format={v => v.toFixed(2)} />
 		<Monitor label='input current [A]' value={dm.telem.ESC.inputCurrent} format={v => v.toFixed(2)} />
 		<Monitor label='duty cycle [%]' value={dm.telem.ESC.dutyCycleNow*100} format={v => v.toFixed(0)} />
