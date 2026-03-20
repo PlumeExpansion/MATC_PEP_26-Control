@@ -5,6 +5,7 @@ import time
 from digi.xbee.devices import XBeeDevice, RemoteXBeeDevice
 from digi.xbee.models.address import XBee64BitAddress
 from digi.xbee.packets.common import ATCommPacket, ATCommResponsePacket
+from digi.xbee.exception import XBeeException
 import serial.tools.list_ports as list_ports
 
 import os
@@ -43,6 +44,14 @@ async def sync_cmds(socket):
 
 async def sync_telem(socket):
 	await socket.send(json.dumps({'type': 'telem', 'data': USVS.telem}))
+
+async def send_aux():
+	for socket in sockets: await sync_cmds(socket)
+	device.send_data_async(remote_device, USVS.pack_aux())
+
+async def send_main():
+	for socket in sockets: await sync_cmds(socket)
+	device.send_data_async(remote_device, USVS.pack_main())
 
 # --- Xbee Link ---
 BAUD = 38400
@@ -153,7 +162,7 @@ async def handler(socket: websockets.ServerConnection):
 		if not sockets: print(f'WARNING: no remaining sockets')
 
 # --- Background Loops ---
-async def transmit_loop(transmit_task):
+async def transmit_loop(transmit_task, stop_event):
 	global transmit_cooling, transmit_bilge
 
 	loop_rate = 100
@@ -189,10 +198,15 @@ async def transmit_loop(transmit_task):
 			await asyncio.sleep(1/loop_rate)
 	except asyncio.CancelledError:
 		print('INFO: transmit loop terminated')
+	except XBeeException as e:
+		print(f'ERROR: XBee error - {e}')
+		print(f'INFO: terminating')
+		stop_event.set()
+
 	except Exception as e:
 		print(f'ERROR: transmit error - {e}')
 		print(f'INFO: restarting transmit task')
-		transmit_task = asyncio.create_task(transmit_loop(transmit_task))
+		transmit_task = asyncio.create_task(transmit_loop(transmit_task, stop_event))
 
 async def console_loop():
 	sentinel = ['q', 'quit', 'stop', 'exit']
@@ -237,6 +251,9 @@ async def console_loop():
 			cmd = tokens[0]
 			arg = tokens[1]
 			if cmd in throttle_sentinel:
+				if controller:
+					print(f'WARNING: controller connected, set throttle with controller')
+					continue
 				try:
 					percent = float(arg)
 					if -100 <= percent <= 100:
@@ -247,6 +264,9 @@ async def console_loop():
 				except:
 					print(f'ERROR: nonfloat throttle percent - {arg}')
 			elif cmd in steering_sentinel:
+				if controller:
+					print(f'WARNING: controller connected, set steering with controller')
+					continue
 				try:
 					percent = float(arg)
 					if -100 <= percent <= 100:
@@ -257,6 +277,9 @@ async def console_loop():
 				except:
 					print(f'ERROR: nonfloat steering percent - {arg}')
 			elif cmd == 'cooling':
+				if controller:
+					print(f'WARNING: controller connected, set cooling with controller')
+					continue
 				try:
 					percent = float(arg)
 					if 0 <= percent <= 100:
@@ -269,6 +292,9 @@ async def console_loop():
 				except:
 					print(f'ERROR: nonfloat cooling percent - {arg}')
 			elif cmd == 'bilge':
+				if controller:
+					print(f'WARNING: controller connected, set bilge with controller')
+					continue
 				try:
 					percent = float(arg)
 					if 0 <= percent <= 100:
@@ -304,20 +330,66 @@ async def console_loop():
 			print(f'WARNING: unknown command received - {cmd}')
 
 async def controller_loop():
+	global transmit_bilge, transmit_cooling
+	last_aux_enable = False
+	last_aux_disable = False
+	last_main_enable = False
+	last_main_disable = False
+	last_e_stop = False
+	last_reset  = False
 	if controller is None: return
 	loop_rate = 100
 	try:
 		while True:
 			pygame.event.pump()
 
-			yaw = controller.get_axis(0)
+			yaw = controller.get_axis(5)
 			throttle = (1-controller.get_axis(2))/2
 
-			reverse = controller.get_button(7)
+			cooling = int(255*(1+controller.get_axis(6))/2)
+			bilge = int(255*(1+controller.get_axis(3))/2)
+			if cooling != USVS.cmds['cooling']:
+				USVS.cmds['cooling'] = cooling
+				transmit_cooling = True
+			if bilge != USVS.cmds['bilge']:
+				USVS.cmds['bilge'] = bilge
+				transmit_bilge = True
+			
+			e_stop = controller.get_button(1)
+			reset = controller.get_button(6)
+			if e_stop and not last_e_stop: await estop()
+			if reset and not last_reset: await reset_flags()
+			last_e_stop = e_stop
+			last_reset = reset
+
+			aux_enable = controller.get_button(8)
+			aux_disable = controller.get_button(9)
+			if aux_enable and not last_aux_enable:
+				USVS.cmds['aux'] = True
+				await send_aux()
+			if aux_disable and not last_aux_disable:
+				USVS.cmds['aux'] = False
+				await send_aux()
+			last_aux_enable = aux_enable
+			last_aux_disable = aux_disable
+			
+			main_enable = controller.get_button(10)
+			main_disable = controller.get_button(11)
+			if main_enable and not last_main_enable:
+				USVS.cmds['main'] = True
+				await send_main()
+			if main_disable and not last_main_disable:
+				USVS.cmds['main'] = False
+				await send_main()
+			last_main_enable = main_enable
+			last_main_disable = main_disable
+			
+			reverse = controller.get_button(30)
 			
 			USVS.cmds['throttle'] = (-1 if reverse==1 else 1)*throttle
 			USVS.cmds['steering'] = yaw
 			
+			for socket in sockets: await sync_cmds(socket)
 			await asyncio.sleep(1/loop_rate)
 	except asyncio.CancelledError:
 		print('INFO: controller link terminated')
@@ -327,15 +399,18 @@ async def controller_loop():
 # --- Entry Point ---
 async def main():
 	port = 9100
+	stop_event = asyncio.Event()
+
 	async with websockets.serve(handler, '127.0.0.1', port):
 		print(f'INFO: ground station server started on port {port}')
 
 		transmit_task = None
-		transmit_task = asyncio.create_task(transmit_loop(transmit_task))
+		transmit_task = asyncio.create_task(transmit_loop(transmit_task, stop_event))
 		controller_task = asyncio.create_task(controller_loop())
+		console_task = asyncio.create_task(console_loop())
 
 		try:
-			await console_loop()
+			_, _ = await asyncio.wait([console_task, asyncio.create_task(stop_event.wait())], return_when=asyncio.FIRST_COMPLETED)
 		except asyncio.CancelledError:
 			print(f'\fINFO: terminating')
 		finally:

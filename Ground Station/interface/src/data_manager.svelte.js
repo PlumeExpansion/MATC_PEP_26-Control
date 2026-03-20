@@ -68,7 +68,7 @@ export class DataManager {
 		return Math.sign(x)*y;
 	}
 	syncCmds(data) {
-		this.cmds.input.y = data['throtte'];
+		this.cmds.input.y = data['throttle'];
 		this.cmds.input.x = data['steering'];
 		this.cmds.cooling = data['cooling']/255;
 		this.cmds.bilge = data['bilge']/255;
