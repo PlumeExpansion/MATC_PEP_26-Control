@@ -5,10 +5,8 @@ Ground station consists of
 - HOTAS
 - XBee XR 900
 
-USV control electronics consists of
+USV receiver control circuit consists of
 - Teensy 4.1
 - XBee XR 900
-- 150kg servo
-- 350A ESC
 - IMU (optional)
 - GPS (optional)
