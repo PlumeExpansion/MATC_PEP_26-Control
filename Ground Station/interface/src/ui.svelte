@@ -59,25 +59,25 @@
 				on:change={ev => dm.callbacks.onInput(ev.detail)}
 				format={v => v.toFixed(2)}/>
 		</Folder>
-		<Folder title='Log' disabled={!isConnected}>
-			<Monitor value={dm.elapsed} label='elapsed [s]' format={v => v.toFixed(2)} />
-			<!-- <Button on:click={() => rm.onToggleRun()}  title={rm.inProgress? 'End Run' : 'Start Run'} /> -->
-			<ButtonGrid on:click={(ev) => {
-				if (ev.detail.label == 'Export') dm.onExportLog();
-				else dm.onToggleLog();
-			}} buttons={dm.inProgress? ['End Log','Export'] : ['Start Log','Export']} rows={1} />
-		</Folder>
 	</Folder>
 </Pane>
 
 <Pane title='Telemetry' x={window.innerWidth} y={0} width={300} localStoreId='rightPane' >
 	<Folder title='Link'>
 		<Monitor label='USV Link' value={dm.telem.usvLinkActive} />
-		<Monitor value={dm.avgRssi} disabled={!dm.telem.usvLinkActive} graph={true} bufferSize={2*5} />
+		<Monitor value={dm.avgRssi} disabled={!dm.telem.usvLinkActive} graph={true} bufferSize={5*5} min={-150} max={0} />
 		<Monitor label='rssi [dBm]' value={dm.avgRssi} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(0)} />
 		<Monitor label='time [s]' value={dm.telem.time / 1000} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(1)} />
-		<Monitor value={dm.telemInterval} disabled={!dm.telem.usvLinkActive} graph={true} bufferSize={5*5} />
-		<Monitor label='rate [Hz]' value={1000/dm.telemInterval} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(2)} />
+		<Monitor value={dm.telemRate} disabled={!dm.telem.usvLinkActive} graph={true} bufferSize={5*5} min={0} max={10} />
+		<Monitor label='rate [Hz]' value={dm.telemRate} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(2)} />
+	</Folder>
+	<Folder title='Log' disabled={!isConnected}>
+		<Monitor value={dm.elapsed} label='elapsed [s]' format={v => v.toFixed(2)} />
+		<!-- <Button on:click={() => rm.onToggleRun()}  title={rm.inProgress? 'End Run' : 'Start Run'} /> -->
+		<ButtonGrid on:click={(ev) => {
+			if (ev.detail.label == 'Export') dm.onExportLog();
+			else dm.onToggleLog();
+		}} buttons={dm.inProgress? ['End Log','Export'] : ['Start Log','Export']} rows={1} />
 	</Folder>
 	<Folder title='drive' disabled={!dm.telem.usvLinkActive} >
 		<Monitor label='steering [%]' value={dm.telem.steering*100} format={v => v.toFixed(0)} />

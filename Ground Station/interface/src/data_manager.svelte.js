@@ -77,7 +77,10 @@ export class DataManager {
 		this.cmds.main = data['main'];
 		this.cmds.aux = data['aux'];
 	}
+	lastTelem = null;
+	lastTime = null;
 	telemInterval = $state(0);
+	telemRate = $state(0);
 	syncTelem(data) {
 		this.telem.ESC.motorCurrent = data['ESC']['motorCurrent'];
 		this.telem.ESC.inputCurrent = data['ESC']['inputCurrent'];
@@ -102,41 +105,51 @@ export class DataManager {
 		this.telem.usvLinkActive = data['usvLinkActive'];
 		this.telem.rssi = data['rssi'];
 
-		this.nRssi += 1;
-		this.sumRssi += this.telem.rssi;
-		now = performance.now();
-		this.telemInterval = now - this.lastTelem;
-		this.lastTelem = now;
+		if (this.telem.time !== this.lastTime && this.lastTime !== null) {
+			const now = performance.now();
 
-		const entry = {
-			// ESC Specific Data
-			motorCurrent: this.telem.ESC.motorCurrent,
-			inputCurrent: this.telem.ESC.inputCurrent,
-			dutyCycleNow: this.telem.ESC.dutyCycleNow,
-			RPM: this.telem.ESC.eRPM / 5,
-			inputVoltage: this.telem.ESC.inputVoltage,
-			wattHours: this.telem.ESC.wattHours,
-			wattHoursCharged: this.telem.ESC.wattHoursCharged,
-			tempMofset: this.telem.ESC.tempMofset,
-			tempMotor: this.telem.ESC.tempMotor,
+			if (this.lastTelem !== null) {
+				this.telemInterval = now - this.lastTelem;
+				this.telemRate = 1000/(this.telemInterval+1e-4);
+			}
+			this.lastTelem = now;
+			this.nRssi += 1;
+			this.sumRssi += this.telem.rssi;
+	
+			const entry = {
+				// ESC Specific Data
+				motorCurrent: this.telem.ESC.motorCurrent,
+				inputCurrent: this.telem.ESC.inputCurrent,
+				dutyCycleNow: this.telem.ESC.dutyCycleNow,
+				RPM: this.telem.ESC.eRPM / 5,
+				inputVoltage: this.telem.ESC.inputVoltage,
+				wattHours: this.telem.ESC.wattHours,
+				wattHoursCharged: this.telem.ESC.wattHoursCharged,
+				tempMofset: this.telem.ESC.tempMofset,
+				tempMotor: this.telem.ESC.tempMotor,
+	
+				// General Control & Status
+				throttle: this.telem.throttle,
+				steering: this.telem.steering,
+				mainEnable: this.telem.mainEnable,
+				auxEnable: this.telem.auxEnable,
+				mainEcho: this.telem.mainEcho,
+				gsLinkActive: this.telem.gsLinkActive,
+				escLinkActive: this.telem.escLinkActive,
+				controlledContactor: this.telem.controlledContactor,
+				time: this.telem.time,
+	
+				// Communication Links
+				usvLinkActive: this.telem.usvLinkActive,
+				rssi: this.telem.rssi,
 
-			// General Control & Status
-			throttle: this.telem.throttle,
-			steering: this.telem.steering,
-			mainEnable: this.telem.mainEnable,
-			auxEnable: this.telem.auxEnable,
-			mainEcho: this.telem.mainEcho,
-			gsLinkActive: this.telem.gsLinkActive,
-			escLinkActive: this.telem.escLinkActive,
-			controlledContactor: this.telem.controlledContactor,
-			time: this.telem.time,
-			gsTime: Date.now(),
-
-			// Communication Links
-			usvLinkActive: this.telem.usvLinkActive,
-			rssi: this.telem.rssi
-		};
-		this.log.push(entry);
+				// Additional Quantities
+				gsTime: Date.now(),
+				elapsed: this.elapsed
+			};
+			this.log.push(entry);
+		}
+		this.lastTime = this.telem.time;
 	}
 	// Data Logging
 	elapsed = $state(0);
@@ -151,18 +164,19 @@ export class DataManager {
 		}
 	}
 
-	RSSI_DEL_MS = 500;
+	RSSI_DEL_MS = 200;
 
-	nRssi;
-	sumRssi;
+	nRssi = 0;
+	sumRssi = 0;
 	avgRssi = $state(0);
-	lastRssi;
-	onUpdate(nowMs,dt) {
+	lastRssi = 0;
+	onUpdate = (nowMs,dt) => {
 		if (this.inProgress) {
-			elapsed = nowMs/1000 - this.startTime;
+			this.elapsed = nowMs/1000 - this.startTime;
 		}
-		if (nowMs - lastRssi > RSSI_DEL_MS) {
-			avgRssi = this.sumRssi/this.nRssi;
+		if (nowMs - this.lastRssi > this.RSSI_DEL_MS) {
+			if (this.nRssi == 0) this.avgRssi = 0;
+			else this.avgRssi = this.sumRssi/this.nRssi;
 			this.sumRssi = 0;
 			this.nRssi = 0;
 			this.lastRssi = nowMs;
@@ -174,7 +188,7 @@ export class DataManager {
 		const csvConfig = mkConfig({
 			columnHeaders: headers, 
 			useKeyAsHeaders: true, 
-			filename: `run_${(new Date()).toLocaleString()}` })
+			filename: `log_${(new Date()).toLocaleString()}` })
 		const csvOutput = generateCsv(csvConfig)(this.log);
 		download(csvConfig)(csvOutput);
 	}

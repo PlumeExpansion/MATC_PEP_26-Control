@@ -9,7 +9,7 @@ const dm = new DataManager();
 const itf = new Interface(dm);
 const socket = new SocketManager(dm);
 
-itf.onRender.push(() => dm.onUpdate());
+itf.onRender.push(dm.onUpdate);
 
 socket.connect(dm.socketParams.url);
 

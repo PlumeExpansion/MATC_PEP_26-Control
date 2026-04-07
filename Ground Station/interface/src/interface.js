@@ -29,6 +29,12 @@ export class Interface {
 		this.controls.enableDamping = true;
 		this.controls.zoomSpeed = 2;
 		this.controls.zoomToCursor = true;
+		
+		this.renderloop = this.renderloop.bind(this);
+		window.requestAnimationFrame((nowMS) => {
+			this.lastMs = nowMS
+			window.requestAnimationFrame(this.renderloop);
+		});
 	}
 	renderloop(nowMs) {
 		const dt = (nowMs - this.lastMs)/1000;
