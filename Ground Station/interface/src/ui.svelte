@@ -31,11 +31,6 @@
 			<Button title='Disable' disabled={!dm.telem.mainEnable} on:click={() => dm.callbacks.onStateChange('main',false)} />
 			<Monitor label='Energized' value={dm.telem.mainEcho} disabled={!dm.telem.usvLinkActive} />
 		</Folder>
-		<Folder title='Link'>
-			<Monitor label='USV Link' value={dm.telem.usvLinkActive} />
-			<Monitor label='rssi [dBm]' value={dm.telem.rssi} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(0)} />
-			<Monitor label='time [s]' value={dm.telem.time / 1000} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(1)} />
-		</Folder>
 		<Folder title='Flags' disabled={!dm.telem.usvLinkActive} >
 			<Monitor label='GS Link' value={dm.telem.gsLinkActive} />
 			<Monitor label='ESC Link' value={dm.telem.escLinkActive} />
@@ -76,6 +71,14 @@
 </Pane>
 
 <Pane title='Telemetry' x={window.innerWidth} y={0} width={300} localStoreId='rightPane' >
+	<Folder title='Link'>
+		<Monitor label='USV Link' value={dm.telem.usvLinkActive} />
+		<Monitor value={dm.avgRssi} disabled={!dm.telem.usvLinkActive} graph={true} bufferSize={2*5} />
+		<Monitor label='rssi [dBm]' value={dm.avgRssi} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(0)} />
+		<Monitor label='time [s]' value={dm.telem.time / 1000} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(1)} />
+		<Monitor value={dm.telemInterval} disabled={!dm.telem.usvLinkActive} graph={true} bufferSize={5*5} />
+		<Monitor label='rate [Hz]' value={1000/dm.telemInterval} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(2)} />
+	</Folder>
 	<Folder title='drive' disabled={!dm.telem.usvLinkActive} >
 		<Monitor label='steering [%]' value={dm.telem.steering*100} format={v => v.toFixed(0)} />
 		<Monitor label='throttle [%]' value={dm.telem.throttle*100} format={v => v.toFixed(0)} />

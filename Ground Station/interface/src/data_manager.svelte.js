@@ -1,3 +1,4 @@
+import { mkConfig, generateCsv, download } from 'export-to-csv';
 
 export class DataManager {
 	socketParams = $state({
@@ -76,6 +77,7 @@ export class DataManager {
 		this.cmds.main = data['main'];
 		this.cmds.aux = data['aux'];
 	}
+	telemInterval = $state(0);
 	syncTelem(data) {
 		this.telem.ESC.motorCurrent = data['ESC']['motorCurrent'];
 		this.telem.ESC.inputCurrent = data['ESC']['inputCurrent'];
@@ -102,6 +104,9 @@ export class DataManager {
 
 		this.nRssi += 1;
 		this.sumRssi += this.telem.rssi;
+		now = performance.now();
+		this.telemInterval = now - this.lastTelem;
+		this.lastTelem = now;
 
 		const entry = {
 			// ESC Specific Data
@@ -134,8 +139,8 @@ export class DataManager {
 		this.log.push(entry);
 	}
 	// Data Logging
-	elapsed = 0;
-	inProgress = false;
+	elapsed = $state(0);
+	inProgress = $state(false);
 	startTime;
 	onToggleLog() {
 		this.inProgress = !this.inProgress;
@@ -148,23 +153,29 @@ export class DataManager {
 
 	RSSI_DEL_MS = 500;
 
-	resetRefValues = false;
 	nRssi;
 	sumRssi;
-	avgRssi;
+	avgRssi = $state(0);
 	lastRssi;
-	telemDelta;
-	telemDelay;
-	onUpdate(now) {
+	onUpdate(nowMs,dt) {
 		if (this.inProgress) {
-			elapsed = now - this.startTime;
+			elapsed = nowMs/1000 - this.startTime;
 		}
-		if (resetRefValues) {
-			telemDelta = 0;
+		if (nowMs - lastRssi > RSSI_DEL_MS) {
+			avgRssi = this.sumRssi/this.nRssi;
+			this.sumRssi = 0;
+			this.nRssi = 0;
+			this.lastRssi = nowMs;
 		}
-		if (now - lastRssi > RSSI_DEL_MS) {
-			avgRssi = 
-		}
-		//TODO: update loop, avg rssi, transmit interval
+	}
+
+	onExportLog() {
+		const headers = Object.keys(this.log[0]);
+		const csvConfig = mkConfig({
+			columnHeaders: headers, 
+			useKeyAsHeaders: true, 
+			filename: `run_${(new Date()).toLocaleString()}` })
+		const csvOutput = generateCsv(csvConfig)(this.log);
+		download(csvConfig)(csvOutput);
 	}
 }

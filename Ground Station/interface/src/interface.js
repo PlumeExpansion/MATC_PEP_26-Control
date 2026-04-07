@@ -39,6 +39,6 @@ export class Interface {
 			console.error("ERROR: render error:", error);
 		}
 		window.requestAnimationFrame(this.renderloop);
-		this.onRender.forEach(callback => callback(dt));
+		this.onRender.forEach(callback => callback(nowMs,dt));
 	};
 }
