@@ -45,6 +45,7 @@ export class DataManager {
 		x0: 0.25,
 		y0: 0.1
 	};
+	log = []
 	constructor() {
 		this.throttle_params.coeffs = this.#getMappingParameters(this.throttle_params.x0, this.throttle_params.y0);
 		this.steering_params.coeffs = this.#getMappingParameters(this.steering_params.x0, this.steering_params.y0);
@@ -98,5 +99,43 @@ export class DataManager {
 
 		this.telem.usvLinkActive = data['usvLinkActive'];
 		this.telem.rssi = data['rssi'];
+
+		const entry = {
+			// ESC Specific Data
+			motorCurrent: this.telem.ESC.motorCurrent,
+			inputCurrent: this.telem.ESC.inputCurrent,
+			dutyCycleNow: this.telem.ESC.dutyCycleNow,
+			RPM: this.telem.ESC.eRPM / 5,
+			inputVoltage: this.telem.ESC.inputVoltage,
+			wattHours: this.telem.ESC.wattHours,
+			wattHoursCharged: this.telem.ESC.wattHoursCharged,
+			tempMofset: this.telem.ESC.tempMofset,
+			tempMotor: this.telem.ESC.tempMotor,
+
+			// General Control & Status
+			throttle: this.telem.throttle,
+			steering: this.telem.steering,
+			mainEnable: this.telem.mainEnable,
+			auxEnable: this.telem.auxEnable,
+			mainEcho: this.telem.mainEcho,
+			gsLinkActive: this.telem.gsLinkActive,
+			escLinkActive: this.telem.escLinkActive,
+			controlledContactor: this.telem.controlledContactor,
+			time: this.telem.time,
+			gsTime: Date.now(),
+
+			// Communication Links
+			usvLinkActive: this.telem.usvLinkActive,
+			rssi: this.telem.rssi
+		};
+		this.log.push(entry);
+	}
+	resetRefValues;
+	lastRssi;
+	telemDelta;
+	telemDelay;
+	onUpdate(now) {
+
+		//TODO: update loop, avg rssi, transmit interval
 	}
 }

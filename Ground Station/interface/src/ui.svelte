@@ -31,13 +31,16 @@
 			<Button title='Disable' disabled={!dm.telem.mainEnable} on:click={() => dm.callbacks.onStateChange('main',false)} />
 			<Monitor label='Energized' value={dm.telem.mainEcho} disabled={!dm.telem.usvLinkActive} />
 		</Folder>
-		<Folder title='Flags'>
+		<Folder title='Link'>
 			<Monitor label='USV Link' value={dm.telem.usvLinkActive} />
 			<Monitor label='rssi [dBm]' value={dm.telem.rssi} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(0)} />
-			<Monitor label='GS Link' value={dm.telem.gsLinkActive} disabled={!dm.telem.usvLinkActive} />
-			<Monitor label='ESC Link' value={dm.telem.escLinkActive} disabled={!dm.telem.usvLinkActive}  />
-			<Monitor label='Contactor Ctrl' value={dm.telem.controlledContactor} disabled={!dm.telem.usvLinkActive} />
-			<Button on:click={() => dm.callbacks.onReset()} title='Reset' disabled={!dm.telem.usvLinkActive} />
+			<Monitor label='time [s]' value={dm.telem.time / 1000} disabled={!dm.telem.usvLinkActive} format={v => v.toFixed(1)} />
+		</Folder>
+		<Folder title='Flags' disabled={!dm.telem.usvLinkActive} >
+			<Monitor label='GS Link' value={dm.telem.gsLinkActive} />
+			<Monitor label='ESC Link' value={dm.telem.escLinkActive} />
+			<Monitor label='Contactor Ctrl' value={dm.telem.controlledContactor} />
+			<Button on:click={() => dm.callbacks.onReset()} title='Reset' />
 		</Folder>
 		<Folder title='Pumps'>
 			<Slider bind:value={dm.cmds.cooling} label='Cooling' min={0} max={1} format={v => v.toFixed(2)} on:change={ev => {
