@@ -100,6 +100,9 @@ export class DataManager {
 		this.telem.usvLinkActive = data['usvLinkActive'];
 		this.telem.rssi = data['rssi'];
 
+		this.nRssi += 1;
+		this.sumRssi += this.telem.rssi;
+
 		const entry = {
 			// ESC Specific Data
 			motorCurrent: this.telem.ESC.motorCurrent,
@@ -130,12 +133,38 @@ export class DataManager {
 		};
 		this.log.push(entry);
 	}
-	resetRefValues;
+	// Data Logging
+	elapsed = 0;
+	inProgress = false;
+	startTime;
+	onToggleLog() {
+		this.inProgress = !this.inProgress;
+		if (this.inProgress) {
+			this.startTime = performance.now() / 1000;
+			this.elapsed = 0;
+			this.log = [];
+		}
+	}
+
+	RSSI_DEL_MS = 500;
+
+	resetRefValues = false;
+	nRssi;
+	sumRssi;
+	avgRssi;
 	lastRssi;
 	telemDelta;
 	telemDelay;
 	onUpdate(now) {
-
+		if (this.inProgress) {
+			elapsed = now - this.startTime;
+		}
+		if (resetRefValues) {
+			telemDelta = 0;
+		}
+		if (now - lastRssi > RSSI_DEL_MS) {
+			avgRssi = 
+		}
 		//TODO: update loop, avg rssi, transmit interval
 	}
 }

@@ -64,6 +64,14 @@
 				on:change={ev => dm.callbacks.onInput(ev.detail)}
 				format={v => v.toFixed(2)}/>
 		</Folder>
+		<Folder title='Log' disabled={!isConnected}>
+			<Monitor value={dm.elapsed} label='elapsed [s]' format={v => v.toFixed(2)} />
+			<!-- <Button on:click={() => rm.onToggleRun()}  title={rm.inProgress? 'End Run' : 'Start Run'} /> -->
+			<ButtonGrid on:click={(ev) => {
+				if (ev.detail.label == 'Export') dm.onExportLog();
+				else dm.onToggleLog();
+			}} buttons={dm.inProgress? ['End Log','Export'] : ['Start Log','Export']} rows={1} />
+		</Folder>
 	</Folder>
 </Pane>
 
