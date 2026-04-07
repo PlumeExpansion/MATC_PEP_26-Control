@@ -3,7 +3,7 @@
 
 #include "CommHandler.h"
 
-#define BAUD_XBEE 38400
+#define BAUD_XBEE 115200
 #define BAUD_ESC 115200
 #define SERIAL_XBEE Serial4
 #define SERIAL_ESC Serial1

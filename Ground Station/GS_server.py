@@ -54,7 +54,7 @@ async def send_main():
 	device.send_data_async(remote_device, USVS.pack_main())
 
 # --- Xbee Link ---
-BAUD = 38400
+BAUD = 115200
 MAC_USV_RN = "0013A20042839427"
 
 sockets = set()
