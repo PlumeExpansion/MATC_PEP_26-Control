@@ -142,6 +142,15 @@ export class DataManager {
 				// Communication Links
 				usvLinkActive: this.telem.usvLinkActive,
 				rssi: this.telem.rssi,
+				telemInterval: this.telemInterval,
+				
+				// Commands
+				// throttleCmd: this.cmds.input.y,
+				// steeringCmd: this.cmds.input.x,
+				cooling: this.cmds.cooling,
+				bilge: this.cmds.bilge,
+				// mainCmd: this.cmds.main,
+				// auxCmd: this.cmds.aux,
 
 				// Additional Quantities
 				gsTime: Date.now(),
