@@ -2,6 +2,7 @@ import asyncio
 import websockets
 import json
 import time
+import math
 from digi.xbee.devices import XBeeDevice, RemoteXBeeDevice
 from digi.xbee.models.address import XBee64BitAddress
 from digi.xbee.packets.common import ATCommPacket, ATCommResponsePacket
@@ -342,6 +343,20 @@ async def console_loop():
 		else:
 			print(f'WARNING: unknown command received - {cmd}')
 
+def get_mapping_params(x0,y0):
+	A = (y0-x0)/(x0*(x0-1)**3);
+	B = 3*(x0-y0)/(x0-1)**3;
+	C = ((y0-3)*x0**3-y0+3*x0*y0)/(x0*(x0-1)**3);
+	D = ((x0-y0)*x0**2)/(x0-1)**3;
+	return { 'A':A, 'B':B, 'C':C, 'D':D, 'x0':x0, 'y0':y0 };
+
+def query_mapped(x,params):
+	xi = math.fabs(x)
+	y = 0
+	if (xi < params['x0']): y = params['y0']/params['x0']*xi
+	else: y = params['A']*xi**3 + params['B']*xi**2 + params['C']*xi + params['D']
+	return math.copysign(y,x)
+
 async def controller_loop():
 	global transmit_bilge, transmit_cooling
 	last_aux_enable = False
@@ -350,6 +365,14 @@ async def controller_loop():
 	last_main_disable = False
 	last_e_stop = False
 	last_reset  = False
+	yaw_mode = 0
+
+	params = [
+		get_mapping_params(0.4,0.3),
+		get_mapping_params(0.5,0.25),
+		get_mapping_params(0.6,0.2)
+	]
+
 	if controller is None: return
 	loop_rate = 100
 	try:
@@ -398,9 +421,17 @@ async def controller_loop():
 			last_main_disable = main_disable
 			
 			reverse = controller.get_button(30)
+
+			btn29 = controller.get_button(29)
+			btn28 = controller.get_button(28)
+			btn27 = controller.get_button(27)
+
+			if (btn29 == 1): yaw_mode = 0
+			if (btn28 == 1): yaw_mode = 1
+			if (btn27 == 1): yaw_mode = 2
 			
 			USVS.cmds['throttle'] = (-1 if reverse==1 else 1)*throttle
-			USVS.cmds['steering'] = yaw
+			USVS.cmds['steering'] = query_mapped(yaw, params[yaw_mode])
 			
 			for socket in sockets: await sync_cmds(socket)
 			await asyncio.sleep(1/loop_rate)
