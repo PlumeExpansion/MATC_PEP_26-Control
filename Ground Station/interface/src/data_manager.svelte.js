@@ -30,9 +30,22 @@ export class DataManager {
 		auxEnable: false,
 		mainEcho: false,
 		gsLinkActive: false,
+		gpsLinkActive: false,
 		escLinkActive: false,
 		controlledContactor: false,
 		time: 0,
+
+		GPS: {
+			latDeg: 0,
+			lonDeg: 0,
+			alt: 0,
+			speed: 0,
+			angle: 0,
+			HDOP: 0,
+			VDOP: 0,
+			satellites: 0,
+			fixQuality: 0,
+		},
 
 		usvLinkActive: false,
 		rssi: 0,
@@ -99,8 +112,19 @@ export class DataManager {
 		this.telem.mainEcho = data['mainEcho'];
 		this.telem.gsLinkActive = data['gsLinkActive'];
 		this.telem.escLinkActive = data['escLinkActive'];
+		this.telem.gpsLinkActive = data['gpsLinkActive'];
 		this.telem.controlledContactor = data['controlledContactor'];
 		this.telem.time = data['time'];
+
+		this.telem.GPS.latDeg = data['GPS']['latDeg'];
+		this.telem.GPS.lonDeg = data['GPS']['lonDeg'];
+		this.telem.GPS.altitude = data['GPS']['altitude'];
+		this.telem.GPS.speed = data['GPS']['speed'];
+		this.telem.GPS.angle = data['GPS']['angle'];
+		this.telem.GPS.HDOP = data['GPS']['HDOP'];
+		this.telem.GPS.VDOP = data['GPS']['VDOP'];
+		this.telem.GPS.satellites = data['GPS']['satellites'];
+		this.telem.GPS.fixQuality = data['GPS']['fixQuality'];
 
 		this.telem.usvLinkActive = data['usvLinkActive'];
 		this.telem.rssi = data['rssi'];
@@ -144,6 +168,17 @@ export class DataManager {
 				rssi: this.telem.rssi,
 				telemInterval: this.telemInterval,
 				
+				// GPS
+				latDeg: this.telem.GPS.latDeg,
+				lonDeg: this.telem.GPS.lonDeg,
+				alt: this.telem.GPS.alt,
+				speed: this.telem.GPS.speed,
+				angle: this.telem.GPS.angle,
+				HDOP: this.telem.GPS.HDOP,
+				VDOP: this.telem.GPS.VDOP,
+				satellites: this.telem.GPS.satellites,
+				fixQuality: this.telem.GPS.fixQuality,
+
 				// Commands
 				// throttleCmd: this.cmds.input.y,
 				// steeringCmd: this.cmds.input.x,

@@ -20,12 +20,12 @@
 	</Folder>
 	<Folder title='Commands' disabled={!isConnected} >
 		<Button on:click={() => dm.callbacks.onEstop()} title='Emergency Stop' />
-		<Folder title='Auxiliary'>
+		<Folder title='Auxiliary' disabled={!dm.telem.usvLinkActive} >
 			<Monitor label='Status' value={dm.telem.auxEnable? 'Enabled' : 'Disabled'}/>
 			<Button title='Enable' disabled={dm.telem.auxEnable} on:click={() => dm.callbacks.onStateChange('aux',true)} />
 			<Button title='Disable' disabled={!dm.telem.auxEnable} on:click={() => dm.callbacks.onStateChange('aux',false)} />
 		</Folder>
-		<Folder title='Main'>
+		<Folder title='Main' disabled={!dm.telem.usvLinkActive || !dm.telem.auxEnable} >
 			<Monitor label='Status' value={dm.telem.mainEnable? 'Enabled' : 'Disabled'}/>
 			<Button title='Enable' disabled={dm.telem.mainEnable} on:click={() => dm.callbacks.onStateChange('main',true)} />
 			<Button title='Disable' disabled={!dm.telem.mainEnable} on:click={() => dm.callbacks.onStateChange('main',false)} />
@@ -34,6 +34,7 @@
 		<Folder title='Flags' disabled={!dm.telem.usvLinkActive} >
 			<Monitor label='GS Link' value={dm.telem.gsLinkActive} />
 			<Monitor label='ESC Link' value={dm.telem.escLinkActive} />
+			<Monitor label='GPS Link' value={dm.telem.gpsLinkActive} />
 			<Monitor label='Contactor Ctrl' value={dm.telem.controlledContactor} />
 			<Button on:click={() => dm.callbacks.onReset()} title='Reset' />
 		</Folder>
@@ -62,7 +63,7 @@
 	</Folder>
 </Pane>
 
-<Pane title='Telemetry' x={window.innerWidth} y={0} width={300} localStoreId='rightPane' >
+<Pane title='Feedback' x={window.innerWidth} y={0} width={300} localStoreId='rightPane' >
 	<Folder title='Link'>
 		<Monitor label='USV Link' value={dm.telem.usvLinkActive} />
 		<Monitor value={dm.avgRssi} disabled={!dm.telem.usvLinkActive} graph={true} bufferSize={5*5} min={-150} max={0} />
@@ -83,6 +84,9 @@
 		<Monitor label='steering [%]' value={dm.telem.steering*100} format={v => v.toFixed(0)} />
 		<Monitor label='throttle [%]' value={dm.telem.throttle*100} format={v => v.toFixed(0)} />
 	</Folder>
+</Pane>
+
+<Pane title='Telemetry' x={window.innerWidth-300} y={0} width={300} localStoreId='midRightPane' >
 	<Folder title='ESC' disabled={!dm.telem.escLinkActive} >
 		<Monitor label='motor current [A]' value={dm.telem.ESC.motorCurrent} format={v => v.toFixed(2)} />
 		<Monitor label='input current [A]' value={dm.telem.ESC.inputCurrent} format={v => v.toFixed(2)} />
@@ -93,5 +97,16 @@
 		<Monitor label='charged [Wh]' value={dm.telem.ESC.wattHoursCharged} format={v => v.toFixed(2)} />
 		<Monitor label='mosfet temp [°C]' value={dm.telem.ESC.tempMofset} format={v => v.toFixed(1)} />
 		<Monitor label='motor temp [°C]' value={dm.telem.ESC.tempMotor} format={v => v.toFixed(1)} />
+	</Folder>
+	<Folder title='GPS' disabled={!dm.telem.gpsLinkActive} >
+		<Monitor label='lat [°]' value={dm.telem.GPS.latDeg} format={v => v.toFixed(2)} />
+		<Monitor label='lon [°]' value={dm.telem.GPS.lonDeg} format={v => v.toFixed(2)} />
+		<Monitor label='alt [m]' value={dm.telem.GPS.alt} format={v => v.toFixed(1)} />
+		<Monitor label='speed [m/s]' value={dm.telem.GPS.speed*0.514444} format={v => v.toFixed(1)} />
+		<Monitor label='angle [°]' value={dm.telem.GPS.angle} format={v => v.toFixed(0)} />
+		<Monitor label='HDOP' value={dm.telem.GPS.HDOP} format={v => v.toFixed(1)} />
+		<Monitor label='VDOP' value={dm.telem.GPS.VDOP} format={v => v.toFixed(1)} />
+		<Monitor label='satellites' value={dm.telem.GPS.satellites} format={v => v.toFixed(0)} />
+		<Monitor label='fix quality' value={['N/A','GPS','DGPS'][dm.telem.GPS.fixQuality]} />
 	</Folder>
 </Pane>

@@ -1,5 +1,6 @@
 #include <XBee.h>
 #include <VescUart.h>
+#include <Adafruit_GPS.h>
 
 #define DRIVE_CMD 0x00
 #define COOLING_CMD 0x01
@@ -36,10 +37,19 @@ public:
 		float eRPM;
 		float inpVoltage;
 		float wattHours;
-		float wattHoursCharged;
 		float tempMosfet;
 		float tempMotor;
 		uint32_t time;
+
+		float latDeg;
+		float lonDeg;
+		float altitude;
+		float speed;
+		float angle;
+		float HDOP;
+		float VDOP;
+		uint8_t satellites;
+		uint8_t fixQuality;
 	};
 	commands cmds;
 	float throttle = 0;
@@ -48,7 +58,7 @@ public:
 	bool auxEnable;
 	bool mainEcho;
 	void read(uint32_t now, bool* gsLinkActivePtr, bool* controlledContactorPtr);
-	void send(uint32_t now, VescUart& ESC, bool gsLinkActive, bool escLinkActive, bool controlledContactor);
+	void send(uint32_t now, VescUart& ESC, Adafruit_GPS& GPS, bool gsLinkActive, bool escLinkActive, bool gpsLinkActive, bool controlledContactor);
 	uint32_t mainOffStamp;
 	uint32_t lastReceived;
 	void sendRawAPI(XBeeAddress64 address, uint8_t* payload, int pyaloadLen);

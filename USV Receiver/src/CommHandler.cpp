@@ -89,7 +89,7 @@ void CommHandler::read(uint32_t now, bool* gsLinkActivePtr, bool* controlledCont
 	}
 }
 
-void CommHandler::send(uint32_t now, VescUart& ESC, bool gsLinkActive, bool escLinkActive, bool controlledContactor)
+void CommHandler::send(uint32_t now, VescUart& ESC, Adafruit_GPS& GPS, bool gsLinkActive, bool escLinkActive, bool gpsLinkActive, bool controlledContactor)
 {
 	telemetry telem;
 	telem.throttle = throttle;
@@ -100,17 +100,27 @@ void CommHandler::send(uint32_t now, VescUart& ESC, bool gsLinkActive, bool escL
 	telem.flags |= (mainEcho << 2);
 	telem.flags |= (gsLinkActive << 3);
 	telem.flags |= (escLinkActive << 4);
-	telem.flags |= (controlledContactor << 5);
+	telem.flags |= (gpsLinkActive << 5);
+	telem.flags |= (controlledContactor << 6);
 	telem.avgMotorCurrent = ESC.data.avgMotorCurrent;
 	telem.avgInputCurrent = ESC.data.avgInputCurrent;
 	telem.dutyCycleNow = ESC.data.dutyCycleNow;
 	telem.eRPM = ESC.data.rpm;
 	telem.inpVoltage = ESC.data.inpVoltage;
 	telem.wattHours = ESC.data.wattHours;
-	telem.wattHoursCharged = ESC.data.wattHoursCharged;
 	telem.tempMosfet = ESC.data.tempMosfet;
 	telem.tempMotor = ESC.data.tempMotor;
 	telem.time = now;
+
+	telem.latDeg = GPS.latitudeDegrees;
+	telem.lonDeg = GPS.longitudeDegrees;
+	telem.altitude = GPS.altitude;
+	telem.speed = GPS.speed;
+	telem.angle = GPS.angle;
+	telem.HDOP = GPS.HDOP;
+	telem.VDOP = GPS.VDOP;
+	telem.satellites = GPS.satellites;
+	telem.fixQuality = GPS.fixquality;
 
 	// Serial.println(telem.throttle);
 	// Serial.println(telem.steering);

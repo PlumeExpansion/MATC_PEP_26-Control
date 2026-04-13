@@ -64,6 +64,10 @@ com_list = [p.device for p in ports]
 print(f"Select XBee COM port: {com_list}")
 PORT = input()
 
+if PORT.strip() == '':
+	PORT = com_list[0]
+	print(f'Attempting {PORT}')
+
 try:
 	device = XBeeDevice(PORT, BAUD)
 	device.open()
@@ -166,26 +170,35 @@ async def transmit_loop(transmit_task, stop_event):
 	global transmit_cooling, transmit_bilge
 
 	loop_rate = 100
-	transmit_rate = 20
+	drive_rate = 20
+	pump_rate = 1
 	rssi_rate = 10
 
-	last_transmit = 0
+	last_drive = 0
 	last_rssi = 0
+	last_pump = 0
 	try:
 		while True:
 			# broadcast commands
 			now = time.perf_counter()
 			USVS.telem['usvLinkActive'] = now - last_received < 1
-			if now - last_transmit > 1/transmit_rate:
-				last_transmit = now
+			if now - last_drive > 1/drive_rate:
+				last_drive = now
 				device.send_data_async(remote_device, USVS.pack_drive())
 
-				if transmit_cooling:
+				if now - last_pump > 1/pump_rate:
+					last_pump = now
 					transmit_cooling = False
-					device.send_data_async(remote_device, USVS.pack_cooling())
-				if transmit_bilge:
 					transmit_bilge = False
+					device.send_data_async(remote_device, USVS.pack_cooling())
 					device.send_data_async(remote_device, USVS.pack_bilge())
+				else:
+					if transmit_cooling:
+						transmit_cooling = False
+						device.send_data_async(remote_device, USVS.pack_cooling())
+					if transmit_bilge:
+						transmit_bilge = False
+						device.send_data_async(remote_device, USVS.pack_bilge())
 			
 			if now - last_rssi > 1/rssi_rate:
 				last_rssi = now

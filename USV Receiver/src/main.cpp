@@ -1,16 +1,20 @@
 #include <arduino.h>
 #include <VescUart.h>
+#include <Adafruit_GPS.h>
 
 #include "CommHandler.h"
 
 #define BAUD_XBEE 115200
 #define BAUD_ESC 115200
+#define BAUD_GPS 9600
 #define SERIAL_XBEE Serial4
 #define SERIAL_ESC Serial1
+#define SERIAL_GPS Serial3
 
 #define TIMEOUT_ESC 20
 #define LOOP_RATE 100
 #define TELEM_RATE 5
+#define GPS_RATE PMTK_SET_NMEA_UPDATE_1HZ
 #define STEERING_DEADZONE 0.01
 
 #define PIN_AUX 4
@@ -23,6 +27,7 @@
 
 CommHandler commHandler(SERIAL_XBEE);
 VescUart ESC(TIMEOUT_ESC);
+Adafruit_GPS GPS(&SERIAL_GPS);
 
 void failLoop(int failMode)
 {
@@ -62,9 +67,10 @@ void setup()
 	while (!Serial && millis() < 2000);
 	Serial.printf("INFO [%lu]: serial initialized\n", millis());
 
+	uint32_t tik = millis();
 	while (!SERIAL_XBEE)
 	{
-		if (millis() > 5000)
+		if (millis()-tik > 2000)
 		{
 			Serial.printf("ERROR [%lu]: XBee serial failed to initialize\n", millis());
 			failLoop(0);
@@ -72,9 +78,10 @@ void setup()
 	}
 	Serial.printf("INFO [%lu]: XBee serial initialized\n", millis());
 
+	tik = millis();
 	while (!SERIAL_ESC)
 	{
-		if (millis() > 5000)
+		if (millis()-tik > 2000)
 		{
 			Serial.printf("ERROR [%lu]: ESC serial failed to initialize\n", millis());
 			failLoop(1);
@@ -93,12 +100,29 @@ void setup()
 	// 	failLoop(2);
 	// }
 	
+	tik = millis();
+	while (!GPS.begin(BAUD_GPS))
+	{
+		if (millis()-tik > 2000)
+		{
+			Serial.printf("ERROR [%lu]: GPS serial failed to initialize\n", millis());
+			failLoop(2);
+		}
+	}
+	Serial.printf("INFO [%lu]: GPS serial initialized\n", millis());
+	GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGAGSA);
+	GPS.sendCommand(GPS_RATE);
+	GPS.sendCommand(PGCMD_ANTENNA);
+	Serial.printf("INFO [%lu]: GPS firmware version (%s)\n",millis(),PMTK_Q_RELEASE);
+
 	Serial.printf("INFO [%lu]: USV initialized\n", millis());
 }
 
 uint32_t lastESC;
+uint32_t lastGPS;
 bool escLinkActive = true;
 bool gsLinkActive = true;
+bool gpsLinkActive = true;
 bool controlledContactor = true;
 void getData(uint32_t now)
 {
@@ -109,9 +133,20 @@ void getData(uint32_t now)
 	// Serial.print(getFW);
 	// Serial.print("\tgetVal: ");
 	// Serial.println(getVal);
+	
+	while (SERIAL_GPS.available()) GPS.read();
+
+	if (GPS.newNMEAreceived() && GPS.parse(GPS.lastNMEA()))
+	{
+		lastGPS = now;
+		if (!gpsLinkActive) Serial.printf("INFO [%lu]: GPS link established\n",now);
+		gpsLinkActive = true;
+	}
+	
 	if (ESC.getVescValues())
 	{
 		lastESC = now;
+		if (!escLinkActive) Serial.printf("INFO [%lu]: ESC link established\n",now);
 		escLinkActive = true;
 	}
 }
@@ -141,6 +176,11 @@ void checkSafety(uint32_t now)
 		commHandler.steering = 0;
 		commHandler.mainEnable = false;
 		Serial.printf("WARNING [%lu]: ESC link lost, cutting main power\n", now);
+	}
+	if (gpsLinkActive && now - lastGPS > 1000)
+	{
+		gpsLinkActive = false;
+		Serial.printf("WARNING [%lu]: GPS link lost\n",now);
 	}
 	if (controlledContactor && !commHandler.mainEnable && commHandler.mainEcho && now - commHandler.mainOffStamp > 1000)
 	{
@@ -204,5 +244,5 @@ void loop()
 
 	if (now-lastTelem < 1000/TELEM_RATE) return;
 	lastTelem = now;
-	commHandler.send(now, ESC, gsLinkActive, escLinkActive, controlledContactor);
+	commHandler.send(now, ESC, GPS, gsLinkActive, escLinkActive, gpsLinkActive, controlledContactor);
 }

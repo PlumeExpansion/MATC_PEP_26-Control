@@ -35,10 +35,23 @@ telem = {
 	'auxEnable': False,
 	'mainEcho': False,
 	'gsLinkActive': False,
+	'gpsLinkActive': False,
 	'escLinkActive': False,
 	'controlledContactor': False,
 	'time': 0,
 	
+	'GPS': {
+		'latDeg': 0,
+		'lonDeg': 0,
+		'alt': 0,
+		'speed': 0,
+		'angle': 0,
+		'HDOP': 0,
+		'VDOP': 0,
+		'satellites': 0,
+		'fixQuality': 0,
+	},
+
 	'usvLinkActive': False,
 	'rssi': 0
 }
@@ -50,7 +63,7 @@ def pack_main(): return struct.pack("<B?", MAIN_CMD, cmds['main'])
 def pack_aux(): return struct.pack("<B?", AUX_CMD, cmds['aux'])
 def pack_reset(): return struct.pack("<B", RESET_CMD)
 
-TELEM_FMT = "<ffBfffffffffI"
+TELEM_FMT = "<ffBffffffffIfffffffBB"
 TELEM_SIZE = struct.calcsize(TELEM_FMT)
 
 def unpack_telem(data):
@@ -65,10 +78,9 @@ def unpack_telem(data):
 		telem['ESC']['eRPM'] = unpacked[6]
 		telem['ESC']['inputVoltage'] = unpacked[7]
 		telem['ESC']['wattHours'] = unpacked[8]
-		telem['ESC']['wattHoursCharged'] = unpacked[9]
-		telem['ESC']['tempMosfet'] = unpacked[10]
-		telem['ESC']['tempMotor'] = unpacked[11]
-		telem['time'] = unpacked[12]
+		telem['ESC']['tempMosfet'] = unpacked[9]
+		telem['ESC']['tempMotor'] = unpacked[10]
+		telem['time'] = unpacked[11]
 
 		flags = unpacked[2]
 		telem['mainEnable'] = bool(flags & (1 << 0))
@@ -76,6 +88,17 @@ def unpack_telem(data):
 		telem['mainEcho'] = bool(flags & (1 << 2))
 		telem['gsLinkActive'] = bool(flags & (1 << 3))
 		telem['escLinkActive'] = bool(flags & (1 << 4))
-		telem['controlledContactor'] = bool(flags & (1 << 5))
+		telem['gpsLinkActive'] = bool(flags & (1 << 5))
+		telem['controlledContactor'] = bool(flags & (1 << 6))
+
+		telem['GPS']['latDeg'] = unpacked[12]
+		telem['GPS']['lonDeg'] = unpacked[13]
+		telem['GPS']['alt'] = unpacked[14]
+		telem['GPS']['speed'] = unpacked[15]
+		telem['GPS']['angle'] = unpacked[16]
+		telem['GPS']['HDOP'] = unpacked[17]
+		telem['GPS']['VDOP'] = unpacked[18]
+		telem['GPS']['satellites'] = unpacked[19]
+		telem['GPS']['fixQuality'] = unpacked[20]
 	else:
 		print(f'WARNING: received corrupted telemetry of length {data_size}, expected {TELEM_SIZE}')
