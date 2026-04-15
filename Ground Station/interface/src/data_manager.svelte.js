@@ -20,7 +20,6 @@ export class DataManager {
 			eRPM: 0,
 			inputVoltage: 0,
 			wattHours: 0,
-			wattHoursCharged: 0,
 			tempMofset: 0,
 			tempMotor: 0,
 		},
@@ -101,7 +100,6 @@ export class DataManager {
 		this.telem.ESC.eRPM = data['ESC']['eRPM'];
 		this.telem.ESC.inputVoltage = data['ESC']['inputVoltage'];
 		this.telem.ESC.wattHours = data['ESC']['wattHours'];
-		this.telem.ESC.wattHoursCharged = data['ESC']['wattHoursCharged'];
 		this.telem.ESC.tempMofset = data['ESC']['tempMosfet'];
 		this.telem.ESC.tempMotor = data['ESC']['tempMotor'];
 
@@ -118,7 +116,7 @@ export class DataManager {
 
 		this.telem.GPS.latDeg = data['GPS']['latDeg'];
 		this.telem.GPS.lonDeg = data['GPS']['lonDeg'];
-		this.telem.GPS.altitude = data['GPS']['altitude'];
+		this.telem.GPS.altitude = data['GPS']['alt'];
 		this.telem.GPS.speed = data['GPS']['speed'];
 		this.telem.GPS.angle = data['GPS']['angle'];
 		this.telem.GPS.HDOP = data['GPS']['HDOP'];
