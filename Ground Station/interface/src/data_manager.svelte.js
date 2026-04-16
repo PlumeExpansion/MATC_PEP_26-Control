@@ -116,7 +116,7 @@ export class DataManager {
 
 		this.telem.GPS.latDeg = data['GPS']['latDeg'];
 		this.telem.GPS.lonDeg = data['GPS']['lonDeg'];
-		this.telem.GPS.altitude = data['GPS']['alt'];
+		this.telem.GPS.alt = data['GPS']['alt'];
 		this.telem.GPS.speed = data['GPS']['speed'];
 		this.telem.GPS.angle = data['GPS']['angle'];
 		this.telem.GPS.HDOP = data['GPS']['HDOP'];
@@ -146,7 +146,6 @@ export class DataManager {
 				RPM: this.telem.ESC.eRPM / 5,
 				inputVoltage: this.telem.ESC.inputVoltage,
 				wattHours: this.telem.ESC.wattHours,
-				wattHoursCharged: this.telem.ESC.wattHoursCharged,
 				tempMofset: this.telem.ESC.tempMofset,
 				tempMotor: this.telem.ESC.tempMotor,
 	
