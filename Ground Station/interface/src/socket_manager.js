@@ -3,7 +3,7 @@ export class SocketManager {
 		this.dm = dm;
 		this.socket = null;
 
-		this.onMessageReceived = (msg) => {
+		this.onMessageReceived = (msg) => {		// received from ground station
 			if (msg['type'] == 'cmds') {
 				dm.syncCmds(msg['data']);
 			} else if (msg['type'] == 'telem') {
@@ -12,7 +12,7 @@ export class SocketManager {
 				console.log('WARNING: unknown data received', msg)
 			}
 		},
-		this.onStatusChange = (status) => {
+		this.onStatusChange = (status) => {		
 			if (status == 'Disconnected') dm.syncFlag = true;
 			dm.updateSocketStatus(status)
 		}
@@ -34,7 +34,7 @@ export class SocketManager {
 		dm.callbacks.onReset = () => this.send({ type: 'reset' });
 		dm.callbacks.onEstop = () => this.send({ type: 'estop' });
 	}
-	connect(url) {
+	connect(url) {		// runs when connect button is clicked
 		if (this.socket != null) return;
 		this.socket = new WebSocket(url);
 		this.onStatusChange('Connecting...');

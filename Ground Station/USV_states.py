@@ -8,6 +8,7 @@ MAIN_CMD = 0x03
 AUX_CMD = 0x04
 RESET_CMD = 0x05
 
+# ground station states
 cmds = {
 	'throttle': 0,
 	'steering': 0,
@@ -17,6 +18,7 @@ cmds = {
 	'aux': False,
 }
 
+# recevied telemetry states
 telem = {
 	'ESC': {
 		'motorCurrent': 0,
@@ -66,7 +68,7 @@ def pack_reset(): return struct.pack("<B", RESET_CMD)
 TELEM_FMT = "<ffBffffffffIfffffffBB"
 TELEM_SIZE = struct.calcsize(TELEM_FMT)
 
-def unpack_telem(data):
+def unpack_telem(data):	# unpack telemetry received from radio
 	data_size = len(data)
 	if data_size == TELEM_SIZE:
 		unpacked = struct.unpack(TELEM_FMT, data)

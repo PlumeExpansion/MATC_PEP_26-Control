@@ -11,10 +11,10 @@
 #define SERIAL_ESC Serial1
 #define SERIAL_GPS Serial3
 
-#define TIMEOUT_ESC 20
+#define TIMEOUT_ESC 20		// ESC update timeout (ms)
 #define LOOP_RATE 100
-#define TELEM_RATE 5
-#define GPS_RATE PMTK_SET_NMEA_UPDATE_1HZ
+#define TELEM_RATE 5		// telemetry transmit rate (Hz)
+#define GPS_RATE PMTK_SET_NMEA_UPDATE_1HZ		// GPS update rate
 #define STEERING_DEADZONE 0.01
 
 #define PIN_AUX 4
@@ -29,7 +29,7 @@ CommHandler commHandler(SERIAL_XBEE);
 VescUart ESC(TIMEOUT_ESC);
 Adafruit_GPS GPS(&SERIAL_GPS);
 
-void failLoop(int failMode)
+void failLoop(int failMode)		// infinite loop when serial fails to init
 {
 	while (true)
 	{
@@ -64,11 +64,11 @@ void setup()
 	SERIAL_XBEE.begin(BAUD_XBEE);
 	SERIAL_ESC.begin(BAUD_ESC);
 	
-	while (!Serial && millis() < 2000);
+	while (!Serial && millis() < 2000);		// wait for USB Serial to initailize if plugged in
 	Serial.printf("INFO [%lu]: serial initialized\n", millis());
 
 	uint32_t tik = millis();
-	while (!SERIAL_XBEE)
+	while (!SERIAL_XBEE)		// wait for xBee serial to initialize
 	{
 		if (millis()-tik > 2000)
 		{
@@ -79,7 +79,7 @@ void setup()
 	Serial.printf("INFO [%lu]: XBee serial initialized\n", millis());
 
 	tik = millis();
-	while (!SERIAL_ESC)
+	while (!SERIAL_ESC)			// wait for ESC serial to initialize
 	{
 		if (millis()-tik > 2000)
 		{
@@ -101,7 +101,7 @@ void setup()
 	// }
 	
 	tik = millis();
-	while (!GPS.begin(BAUD_GPS))
+	while (!GPS.begin(BAUD_GPS))		// wait for GPS serial to initialize
 	{
 		if (millis()-tik > 2000)
 		{
@@ -110,6 +110,7 @@ void setup()
 		}
 	}
 	Serial.printf("INFO [%lu]: GPS serial initialized\n", millis());
+	// set GPS settings
 	GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGAGSA);
 	GPS.sendCommand(GPS_RATE);
 	GPS.sendCommand(PGCMD_ANTENNA);
@@ -136,14 +137,14 @@ void getData(uint32_t now)
 	
 	while (SERIAL_GPS.available()) GPS.read();
 
-	if (GPS.newNMEAreceived() && GPS.parse(GPS.lastNMEA()))
+	if (GPS.newNMEAreceived() && GPS.parse(GPS.lastNMEA()))		// read GPS if valid data received
 	{
 		lastGPS = now;
 		if (!gpsLinkActive) Serial.printf("INFO [%lu]: GPS link established\n",now);
 		gpsLinkActive = true;
 	}
 	
-	if (ESC.getVescValues())
+	if (ESC.getVescValues())		// read ESC data if available
 	{
 		lastESC = now;
 		if (!escLinkActive) Serial.printf("INFO [%lu]: ESC link established\n",now);
@@ -207,17 +208,17 @@ void setControls(uint32_t now)
 	ESC.setDuty(commHandler.throttle);
 	
 	// TODO: add encoder
-	if (commHandler.steering > STEERING_DEADZONE)
+	if (commHandler.steering > STEERING_DEADZONE)		// steering if commanded speed greater than deadzone 
 	{
 		analogWrite(PIN_LIN_ACT_FORW, (int)(commHandler.steering*256));
 		analogWrite(PIN_LIN_ACT_BACK, LOW);
 	}
-	else if (commHandler.steering < -STEERING_DEADZONE)
+	else if (commHandler.steering < -STEERING_DEADZONE)		// steering if commanded speed less than negative deadzone
 	{
 		analogWrite(PIN_LIN_ACT_BACK, (int)(-commHandler.steering*256));
 		analogWrite(PIN_LIN_ACT_FORW, LOW);
 	}
-	else
+	else		// don't steer if within deadzone
 	{
 		analogWrite(PIN_LIN_ACT_FORW, LOW);
 		analogWrite(PIN_LIN_ACT_BACK, LOW);
@@ -234,7 +235,7 @@ uint32_t lastTelem;
 void loop()
 {
 	now = millis();
-	if (now-last < 1000/LOOP_RATE) return;
+	if (now-last < 1000/LOOP_RATE) return;		// wait until time to loop
 	last = now;
 	commHandler.read(now, &gsLinkActive, &controlledContactor);
 	
@@ -242,7 +243,7 @@ void loop()
 	checkSafety(now);
 	setControls(now);
 
-	if (now-lastTelem < 1000/TELEM_RATE) return;
+	if (now-lastTelem < 1000/TELEM_RATE) return;		// transmit at specified rate
 	lastTelem = now;
 	commHandler.send(now, ESC, GPS, gsLinkActive, escLinkActive, gpsLinkActive, controlledContactor);
 }

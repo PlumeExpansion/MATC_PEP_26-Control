@@ -143,7 +143,7 @@ export class DataManager {
 				motorCurrent: this.telem.ESC.motorCurrent,
 				inputCurrent: this.telem.ESC.inputCurrent,
 				dutyCycleNow: this.telem.ESC.dutyCycleNow,
-				RPM: this.telem.ESC.eRPM / 5,
+				RPM: this.telem.ESC.eRPM / 5,	// since used motor has 5 pole pairs
 				inputVoltage: this.telem.ESC.inputVoltage,
 				wattHours: this.telem.ESC.wattHours,
 				tempMofset: this.telem.ESC.tempMofset,
@@ -205,13 +205,13 @@ export class DataManager {
 		}
 	}
 
-	RSSI_DEL_MS = 200;
+	RSSI_DEL_MS = 200;		// interval to mean RSSI 
 
 	nRssi = 0;
 	sumRssi = 0;
 	avgRssi = $state(0);
 	lastRssi = 0;
-	onUpdate = (nowMs,dt) => {
+	onUpdate = (nowMs,dt) => {		// added to interface renderloop which runs each time interface renders
 		if (this.inProgress) {
 			this.elapsed = nowMs/1000 - this.startTime;
 		}

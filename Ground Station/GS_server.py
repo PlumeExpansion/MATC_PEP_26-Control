@@ -60,6 +60,7 @@ MAC_USV_RN = "0013A20042839427"
 
 sockets = set()
 
+# get USB ports connected to laptop & select which is XBee
 ports = list_ports.comports()
 com_list = [p.device for p in ports]
 print(f"Select XBee COM port: {com_list}")
@@ -80,6 +81,7 @@ except Exception as e:
 remote_addr = XBee64BitAddress.from_hex_string(MAC_USV_RN)
 remote_device = RemoteXBeeDevice(device, remote_addr)
 
+# callback function for when XBee receives packets
 last_received = 0
 def on_data_received(xbee_message):
 	global last_received
@@ -90,6 +92,7 @@ def on_data_received(xbee_message):
 	last_received = time.perf_counter()
 	USVS.unpack_telem(xbee_message.data)
 
+# callback function for when XBee receives RSSI queries
 def packet_received_callback(packet):
 	if isinstance(packet, ATCommResponsePacket):
 		if packet.command == "DB":
@@ -126,7 +129,7 @@ async def handler(socket: websockets.ServerConnection):
 	await sync_cmds(socket)
 	await sync_telem(socket)
 	try:
-		async for message in socket:
+		async for message in socket:	# handle inputs from frontend
 			data = json.loads(message)
 			try:
 				dataType = data['type']
@@ -170,10 +173,10 @@ async def handler(socket: websockets.ServerConnection):
 async def transmit_loop(transmit_task, stop_event):
 	global transmit_cooling, transmit_bilge
 
-	loop_rate = 100
-	drive_rate = 20
-	pump_rate = 1
-	rssi_rate = 10
+	loop_rate = 100		# rate broadcast loop is run (Hz)
+	drive_rate = 20		# rate throttle & steering is transmitted (Hz)
+	pump_rate = 1		# rate cooling & bilge pump controls is transmitted (Hz)
+	rssi_rate = 10		# rate RSSI is polled (Hz)
 
 	last_drive = 0
 	last_rssi = 0
@@ -183,17 +186,17 @@ async def transmit_loop(transmit_task, stop_event):
 			# broadcast commands
 			now = time.perf_counter()
 			USVS.telem['usvLinkActive'] = now - last_received < 1
-			if now - last_drive > 1/drive_rate:
+			if now - last_drive > 1/drive_rate:		# broadcast drive commands at specified rate
 				last_drive = now
 				device.send_data_async(remote_device, USVS.pack_drive())
 
-				if now - last_pump > 1/pump_rate:
+				if now - last_pump > 1/pump_rate:		# broadcast pump commands at specified rate
 					last_pump = now
 					transmit_cooling = False
 					transmit_bilge = False
 					device.send_data_async(remote_device, USVS.pack_cooling())
 					device.send_data_async(remote_device, USVS.pack_bilge())
-				else:
+				else:									# broadcast pump commands if transmit flag is true
 					if transmit_cooling:
 						transmit_cooling = False
 						device.send_data_async(remote_device, USVS.pack_cooling())
@@ -201,12 +204,12 @@ async def transmit_loop(transmit_task, stop_event):
 						transmit_bilge = False
 						device.send_data_async(remote_device, USVS.pack_bilge())
 			
-			if now - last_rssi > 1/rssi_rate:
+			if now - last_rssi > 1/rssi_rate:		# poll RSSI at specified rate
 				last_rssi = now
 				at_db_packet = ATCommPacket(frame_id=1, command='DB')
 				device.send_packet(at_db_packet)
 				
-			# sync telem
+			# sync telem with frontend
 			for socket in sockets: await sync_telem(socket)
 
 			await asyncio.sleep(1/loop_rate)
@@ -261,7 +264,7 @@ async def console_loop():
 			print(f'INFO: main power - current: {'enabled' if USVS.telem['mainEnable'] else 'disabled'}\ttarget: {'enabled' if USVS.cmds['main'] else 'disabled'}')
 		elif cmd in estop_sentinel:
 			await estop()
-		elif len(tokens) == 2:
+		elif len(tokens) == 2:	# console command with two inputs
 			cmd = tokens[0]
 			arg = tokens[1]
 			if cmd in throttle_sentinel:
@@ -343,6 +346,7 @@ async def console_loop():
 		else:
 			print(f'WARNING: unknown command received - {cmd}')
 
+# parameters for piecewise linear cubic mapping
 def get_mapping_params(x0,y0):
 	A = (y0-x0)/(x0*(x0-1)**3);
 	B = 3*(x0-y0)/(x0-1)**3;
@@ -350,6 +354,7 @@ def get_mapping_params(x0,y0):
 	D = ((x0-y0)*x0**2)/(x0-1)**3;
 	return { 'A':A, 'B':B, 'C':C, 'D':D, 'x0':x0, 'y0':y0 };
 
+# getting mapped controls with piecewise linear cubic (https://www.desmos.com/calculator/ytacd8osjl) 
 def query_mapped(x,params):
 	xi = math.fabs(x)
 	y = 0
@@ -374,7 +379,7 @@ async def controller_loop():
 	]
 
 	if controller is None: return
-	loop_rate = 100
+	loop_rate = 100		# rate controller is polled
 	try:
 		while True:
 			pygame.event.pump()
@@ -384,10 +389,10 @@ async def controller_loop():
 
 			cooling = int(255*(1+controller.get_axis(6))/2)
 			bilge = int(255*(1+controller.get_axis(3))/2)
-			if cooling != USVS.cmds['cooling']:
+			if cooling != USVS.cmds['cooling']:		# mark cooling to transmit if input is different from last recorded
 				USVS.cmds['cooling'] = cooling
 				transmit_cooling = True
-			if bilge != USVS.cmds['bilge']:
+			if bilge != USVS.cmds['bilge']:		# mark bilge to transmit if input is different from last recorded
 				USVS.cmds['bilge'] = bilge
 				transmit_bilge = True
 			
@@ -422,9 +427,9 @@ async def controller_loop():
 			
 			reverse = controller.get_button(30)
 
-			btn29 = controller.get_button(29)
-			btn28 = controller.get_button(28)
-			btn27 = controller.get_button(27)
+			btn29 = controller.get_button(29)		# low speed controls
+			btn28 = controller.get_button(28)		# mid speed controls
+			btn27 = controller.get_button(27)		# high speed controls
 
 			if (btn29 == 1): yaw_mode = 0
 			if (btn28 == 1): yaw_mode = 1
@@ -433,7 +438,7 @@ async def controller_loop():
 			USVS.cmds['throttle'] = (-1 if reverse==1 else 1)*throttle
 			USVS.cmds['steering'] = query_mapped(yaw, params[yaw_mode])
 			
-			for socket in sockets: await sync_cmds(socket)
+			for socket in sockets: await sync_cmds(socket)	# broadcast 
 			await asyncio.sleep(1/loop_rate)
 	except asyncio.CancelledError:
 		print('INFO: controller link terminated')
